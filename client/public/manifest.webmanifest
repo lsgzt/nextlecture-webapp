@@ -1,0 +1,12 @@
+{
+  "name": "NextLecture",
+  "short_name": "NextLecture",
+  "description": "A fast GNDEC timetable companion.",
+  "start_url": "/app",
+  "display": "standalone",
+  "background_color": "#f7f8f6",
+  "theme_color": "#0d9488",
+  "icons": [
+    { "src": "/manus-storage/nextlecture-icon_f9c8407e.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
