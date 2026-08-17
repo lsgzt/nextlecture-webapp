@@ -2,7 +2,7 @@
  * Product settings deliberately kept in one place.
  * Replace ANDROID_APP_URL when the downloadable Android APK is ready.
  */
-export const ANDROID_APP_URL = "https://YOUR-ANDROID-APK-URL-HERE";
+export const ANDROID_APP_URL = "https://github.com/lsgzt/nextlecture-android/releases/latest/download/gndec-timetable.apk";
 
 /** The single official source used by the server-side timetable fetcher. */
 export const TIMETABLE_SOURCE_URL =
