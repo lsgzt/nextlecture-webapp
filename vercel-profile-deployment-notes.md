@@ -18,3 +18,5 @@ The production deployment for commit `8ffb46d` reached `READY` as deployment `dp
 ## Stale deployment clarification
 
 The later deployment `dpl_GDb2srd8BArh95uwgSE6wBBR8uqV` failed in Vercel's patch-build step while rebuilding historical commit `c74701d`, whose `vercel.json` still requested a pnpm-symlinked PDF parser inclusion. That commit predates the current serverless-safe parser repair. The current main branch removes this inclusion entirely and is represented by the previously verified ready deployment for commit `f4ffab0`.
+
+A fresh production deployment from current main, `dpl_DwC1ynyCMj2cnGXAqom6RNnGECtX` for commit `6214fbb`, reached `READY`. The public `/app` route then loaded its group-selection state with the official GNDEC timetable groups, confirming that the stale Vercel error did not affect the repaired deployment.
