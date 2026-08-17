@@ -10,4 +10,4 @@
 - [x] Verify type safety, test results, server logs, desktop/mobile rendering, and accessible interaction states.
 - [x] Verify and document keyboard navigation, visible focus states, form labels, and reduced-motion behavior across `/` and `/app`.
 - [x] Add Vitest coverage for the timetable groups, dashboard, refresh, missing-group, outage, and stale-cache procedure behaviors.
-- [ ] Push the completed source code to the user-provided GitHub repository.
+- [x] Push the completed source code to the user-provided GitHub repository.
