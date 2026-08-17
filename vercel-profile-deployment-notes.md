@@ -14,3 +14,7 @@ The production deployment for commit `8ffb46d` reached `READY` as deployment `dp
 | --- | --- |
 | `temporarySections.prepare` for `IT` | Returned the official IT document URL and `studentCount: 188`, with a fresh cache result. |
 | `timetable.groups` | Returned the current official group list, including `ITB2` and all supported timetable groups. |
+
+## Stale deployment clarification
+
+The later deployment `dpl_GDb2srd8BArh95uwgSE6wBBR8uqV` failed in Vercel's patch-build step while rebuilding historical commit `c74701d`, whose `vercel.json` still requested a pnpm-symlinked PDF parser inclusion. That commit predates the current serverless-safe parser repair. The current main branch removes this inclusion entirely and is represented by the previously verified ready deployment for commit `f4ffab0`.
