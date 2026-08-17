@@ -1,0 +1,7 @@
+# Vercel Profile Deployment Notes
+
+The public deployment at `https://nextlecture.vercel.app` successfully returned the regular timetable-group tRPC response after the top-level PDF parser import was deferred. This confirms that the general serverless API startup path recovered.
+
+The production `temporarySections.prepare` endpoint continued to return its safe `BAD_GATEWAY` fallback. Its response was immediate (about one second in direct testing), indicating an optional runtime dependency or initialization failure rather than the 20–53 second official PDF transfer observed in local cold-cache validation. The web UI remains safe because it exposes manual profile entry when preparation fails.
+
+The latest failed deployment identified the exact build-blocking cause: Vercel requires `functions["api/index.js"].includeFiles` to be a **single string**, not an array. The configuration now uses one brace-expansion glob that includes `pdf-parse`, `pdfjs-dist`, and the PDF parser's optional N-API canvas runtime packages, while retaining the 60-second function duration. Source: <https://vercel.com/docs/functions/configuring-functions/duration> and <https://vercel.com/docs/project-configuration/vercel-json>.
