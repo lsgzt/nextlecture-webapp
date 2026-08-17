@@ -828,9 +828,10 @@ var appRouter = router({
       try {
         return await prepareTemporarySectionBranch(input.branch);
       } catch (error) {
+        const reason = error instanceof Error ? error.message : "The official document could not be read.";
         throw new TRPCError3({
           code: "BAD_GATEWAY",
-          message: "We couldn't prepare the official temporary-section list. You can enter your profile manually instead.",
+          message: `We couldn't prepare the official temporary-section list. ${reason}`,
           cause: error
         });
       }
