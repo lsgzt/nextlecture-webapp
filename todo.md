@@ -12,4 +12,4 @@
 - [x] Add Vitest coverage for the timetable groups, dashboard, refresh, missing-group, outage, and stale-cache procedure behaviors.
 - [x] Push the completed source code to the user-provided GitHub repository.
 - [x] Diagnose the Vercel deployment rendering source files instead of the built application.
-- [ ] Apply, validate, and push the Vercel deployment configuration fix to GitHub.
+- [x] Apply, validate, and push the Vercel deployment configuration fix to GitHub.
