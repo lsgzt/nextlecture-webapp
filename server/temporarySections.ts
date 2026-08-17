@@ -2,6 +2,7 @@ import { load } from "cheerio";
 import axios from "axios";
 import { eq } from "drizzle-orm";
 import { Agent } from "node:https";
+import { extractText, getDocumentProxy } from "unpdf";
 import { timetableCache } from "../drizzle/schema";
 import {
   TEMPORARY_SECTION_CACHE_TTL_MS,
@@ -197,12 +198,12 @@ async function fetchOfficialPdfBytes(sourceUrl: string) {
 }
 
 async function extractOfficialPdfText(sourceUrl: string) {
-  const { PDFParse } = await import("pdf-parse");
-  const parser = new PDFParse({ data: await fetchOfficialPdfBytes(sourceUrl) });
+  const document = await getDocumentProxy(new Uint8Array(await fetchOfficialPdfBytes(sourceUrl)));
   try {
-    return (await parser.getText()).text;
+    const extracted = await extractText(document, { mergePages: true });
+    return extracted.text;
   } finally {
-    await parser.destroy();
+    await (document as { destroy?: () => Promise<void> | void }).destroy?.();
   }
 }
 

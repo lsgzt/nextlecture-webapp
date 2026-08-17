@@ -516,6 +516,7 @@ import { load as load2 } from "cheerio";
 import axios from "axios";
 import { eq as eq3 } from "drizzle-orm";
 import { Agent } from "node:https";
+import { extractText, getDocumentProxy } from "unpdf";
 
 // shared/student-profile.ts
 var TEMPORARY_SECTION_BRANCHES = ["CE", "CS", "EC", "EE", "IT", "ME", "RAI"];
@@ -658,12 +659,12 @@ async function fetchOfficialPdfBytes(sourceUrl) {
   return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)));
 }
 async function extractOfficialPdfText(sourceUrl) {
-  const { PDFParse } = await import("pdf-parse");
-  const parser = new PDFParse({ data: await fetchOfficialPdfBytes(sourceUrl) });
+  const document = await getDocumentProxy(new Uint8Array(await fetchOfficialPdfBytes(sourceUrl)));
   try {
-    return (await parser.getText()).text;
+    const extracted = await extractText(document, { mergePages: true });
+    return extracted.text;
   } finally {
-    await parser.destroy();
+    await document.destroy?.();
   }
 }
 async function readPersistentCache2(branch) {
