@@ -19,6 +19,7 @@
 - [x] Add a complete manual profile entry fallback for unavailable or unmatched official information.
 - [x] Add parser and procedure tests and validate mobile onboarding.
 - [ ] Commit and push the verified temporary-section profile feature to GitHub, then verify the deployment update.
+- [ ] Prevent optional PDF parsing dependencies from crashing Vercel API startup and verify public timetable and profile endpoints.
 - [x] Make cold first-time temporary-section lookups reliable for every supported branch and re-verify at least two uncached branches.
 - [x] Ensure the profile workflow uses a resilient staged cache path so name search remains available before a live PDF cache is warmed.
 - [x] Add a public branch-cache preparation procedure so first-run students see staged official-PDF preparation rather than a hidden long name-search wait.

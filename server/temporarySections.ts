@@ -2,7 +2,6 @@ import { load } from "cheerio";
 import axios from "axios";
 import { eq } from "drizzle-orm";
 import { Agent } from "node:https";
-import { PDFParse } from "pdf-parse";
 import { timetableCache } from "../drizzle/schema";
 import {
   TEMPORARY_SECTION_CACHE_TTL_MS,
@@ -198,6 +197,7 @@ async function fetchOfficialPdfBytes(sourceUrl: string) {
 }
 
 async function extractOfficialPdfText(sourceUrl: string) {
+  const { PDFParse } = await import("pdf-parse");
   const parser = new PDFParse({ data: await fetchOfficialPdfBytes(sourceUrl) });
   try {
     return (await parser.getText()).text;
