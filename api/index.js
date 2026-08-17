@@ -228,7 +228,9 @@ var timetableCache = mysqlTable("timetable_cache", {
 
 // shared/config.ts
 var TIMETABLE_SOURCE_URL = "https://appsc.gndec.ac.in/sites/default/files/2026-08/09_08_2026%20FINAL_FILE_subgroups_days_horizontal.html";
+var TEMPORARY_SECTION_SOURCE_PAGE_URL = "https://appsc.gndec.ac.in/time_tables";
 var TIMETABLE_CACHE_TTL_MS = 30 * 60 * 1e3;
+var TEMPORARY_SECTION_CACHE_TTL_MS = 6 * 60 * 60 * 1e3;
 
 // shared/timetable.ts
 var WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
@@ -509,6 +511,259 @@ function findGroupTimetable(data, requestedGroup) {
   return data.timetables.find((item) => item.group.code.toUpperCase() === normalized) ?? null;
 }
 
+// server/temporarySections.ts
+import { load as load2 } from "cheerio";
+import axios from "axios";
+import { eq as eq3 } from "drizzle-orm";
+import { Agent } from "node:https";
+import { PDFParse } from "pdf-parse";
+
+// shared/student-profile.ts
+var TEMPORARY_SECTION_BRANCHES = ["CE", "CS", "EC", "EE", "IT", "ME", "RAI"];
+
+// server/temporarySections.ts
+var REQUEST_TIMEOUT_MS2 = 25e3;
+var CACHE_PREFIX = "official-gnedc-temporary-section-2026";
+var PDF_RANGE_CHUNK_BYTES = 4 * 1024;
+var PDF_RANGE_CONCURRENCY = 8;
+var PDF_RANGE_TIMEOUT_MS = 25e3;
+var PDF_RANGE_RETRIES = 2;
+var MAX_OFFICIAL_PDF_BYTES = 4 * 1024 * 1024;
+var OFFICIAL_HTTPS_AGENT = new Agent({ keepAlive: false, maxSockets: PDF_RANGE_CONCURRENCY });
+var inMemoryCache2 = /* @__PURE__ */ new Map();
+var inFlightRefresh2 = /* @__PURE__ */ new Map();
+function cacheKey(branch) {
+  return `${CACHE_PREFIX}:${branch}`;
+}
+function normalizeText2(value) {
+  return value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+}
+function normalizeSearch(value) {
+  return normalizeText2(value).toUpperCase().replace(/[^A-Z0-9 ]/g, "");
+}
+function isBranch(value) {
+  return TEMPORARY_SECTION_BRANCHES.includes(value);
+}
+function isValidEnvelope2(value) {
+  if (!value || typeof value !== "object") return false;
+  const cache = value;
+  return Boolean(
+    cache.data && isBranch(cache.data.branch ?? "") && Array.isArray(cache.data.students) && typeof cache.fetchedAt === "number" && typeof cache.sourceUrl === "string"
+  );
+}
+function parseTemporarySectionText(text2, expectedBranch, sourceUrl) {
+  const normalized = normalizeText2(text2);
+  const students = [];
+  const rowPattern = /(\d{1,4})\s+([A-Z][A-Z .'-]*?)\s+(\d{8})\s+([A-Z]{2,5})\s+([A-Z]{2,5}\d?)\s+([A-Z]{2,5}\d+)\s+((?:DR\.|ER\.)\s+[A-Z][A-Z .'-]*?)(?=\s+\d{1,4}\s+[A-Z]|\s+SR\.\s+NO\.|\s+\*\*|$)/gi;
+  for (const match of Array.from(normalized.matchAll(rowPattern))) {
+    const [, serial, name, registration, branch, temporarySection, temporarySubsection, mentor] = match;
+    const recordBranch = normalizeText2(branch).toUpperCase();
+    if (recordBranch !== expectedBranch) continue;
+    students.push({
+      candidateName: normalizeText2(name),
+      registrationNumber: registration,
+      rollNumber: serial,
+      branch: recordBranch,
+      temporarySection: normalizeText2(temporarySection).toUpperCase(),
+      temporarySubsection: normalizeText2(temporarySubsection).toUpperCase(),
+      mentorName: normalizeText2(mentor) || null,
+      source: "official",
+      sourceUrl,
+      savedAt: Date.now()
+    });
+  }
+  if (!students.length) {
+    throw new Error(`The official ${expectedBranch} temporary-section document did not contain readable student rows.`);
+  }
+  const seen = /* @__PURE__ */ new Set();
+  return students.filter((student) => {
+    const key = student.registrationNumber;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).sort((left, right) => Number(left.rollNumber) - Number(right.rollNumber));
+}
+function findBranchDocumentUrl(html, branch) {
+  const $ = load2(html);
+  const target = `${branch} BRANCH`;
+  const href = $("a").toArray().map((node) => {
+    const href2 = $(node).attr("href");
+    return { href: href2, decodedHref: href2 ? decodeURIComponent(href2) : "", label: normalizeText2($(node).text()).toUpperCase() };
+  }).find((link) => link.href && /\.pdf(?:$|\?)/i.test(link.href) && link.label.includes(target) && /TEMPORARY\s+SECTION/i.test(link.decodedHref))?.href;
+  if (!href) throw new Error(`The official website does not currently list a ${branch} temporary-section PDF.`);
+  return new URL(href, TEMPORARY_SECTION_SOURCE_PAGE_URL).toString();
+}
+async function discoverBranchDocument(branch) {
+  const response = await fetch(TEMPORARY_SECTION_SOURCE_PAGE_URL, {
+    headers: { Accept: "text/html,application/xhtml+xml", "User-Agent": "NextLecture/1.0 (GNDEC profile companion)" },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS2)
+  });
+  if (!response.ok) throw new Error(`The official temporary-section page responded with ${response.status}.`);
+  return findBranchDocumentUrl(await response.text(), branch);
+}
+function getTotalPdfBytes(contentRange) {
+  const total = contentRange?.match(/\/(\d+)$/)?.[1];
+  const size = total ? Number(total) : NaN;
+  if (!Number.isFinite(size) || size <= 0 || size > MAX_OFFICIAL_PDF_BYTES) {
+    throw new Error("The official temporary-section PDF size could not be safely determined.");
+  }
+  return size;
+}
+async function fetchPdfRange(sourceUrl, start, end) {
+  let lastError = null;
+  for (let attempt = 0; attempt <= PDF_RANGE_RETRIES; attempt += 1) {
+    try {
+      const response = await axios.get(sourceUrl, {
+        headers: {
+          Accept: "application/pdf,application/octet-stream;q=0.9,*/*;q=0.8",
+          Range: `bytes=${start}-${end}`,
+          Connection: "close",
+          "User-Agent": "NextLecture/1.0 (GNDEC profile companion)"
+        },
+        responseType: "arraybuffer",
+        timeout: PDF_RANGE_TIMEOUT_MS,
+        httpsAgent: OFFICIAL_HTTPS_AGENT,
+        maxContentLength: PDF_RANGE_CHUNK_BYTES + 256,
+        maxBodyLength: PDF_RANGE_CHUNK_BYTES + 256
+      });
+      if (response.status !== 206) throw new Error(`The official PDF did not honour a bounded range request (${response.status}).`);
+      const bytes = new Uint8Array(response.data);
+      const expected = end - start + 1;
+      if (bytes.byteLength !== expected) throw new Error("The official PDF returned an incomplete range response.");
+      return { bytes, contentRange: response.headers["content-range"] ?? null };
+    } catch (error) {
+      lastError = error;
+      if (attempt < PDF_RANGE_RETRIES) await new Promise((resolve) => setTimeout(resolve, 350 * (attempt + 1)));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("The official PDF range request failed.");
+}
+async function fetchOfficialPdfBytes(sourceUrl) {
+  const first = await fetchPdfRange(sourceUrl, 0, PDF_RANGE_CHUNK_BYTES - 1);
+  const totalBytes = getTotalPdfBytes(first.contentRange);
+  const ranges = Array.from({ length: Math.ceil(totalBytes / PDF_RANGE_CHUNK_BYTES) }, (_, index) => {
+    const start = index * PDF_RANGE_CHUNK_BYTES;
+    return { index, start, end: Math.min(totalBytes - 1, start + PDF_RANGE_CHUNK_BYTES - 1) };
+  });
+  const chunks = Array.from({ length: ranges.length });
+  chunks[0] = first.bytes;
+  let nextRange = 1;
+  await Promise.all(Array.from({ length: Math.min(PDF_RANGE_CONCURRENCY, Math.max(0, ranges.length - 1)) }, async () => {
+    while (nextRange < ranges.length) {
+      const rangeIndex = nextRange;
+      nextRange += 1;
+      const range = ranges[rangeIndex];
+      chunks[rangeIndex] = (await fetchPdfRange(sourceUrl, range.start, range.end)).bytes;
+    }
+  }));
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)));
+}
+async function extractOfficialPdfText(sourceUrl) {
+  const parser = new PDFParse({ data: await fetchOfficialPdfBytes(sourceUrl) });
+  try {
+    return (await parser.getText()).text;
+  } finally {
+    await parser.destroy();
+  }
+}
+async function readPersistentCache2(branch) {
+  const db = await getDb();
+  if (!db) return null;
+  try {
+    const rows = await db.select({ payload: timetableCache.payload }).from(timetableCache).where(eq3(timetableCache.id, cacheKey(branch))).limit(1);
+    const parsed = rows[0] ? JSON.parse(rows[0].payload) : null;
+    return isValidEnvelope2(parsed) && parsed.data.branch === branch ? parsed : null;
+  } catch (error) {
+    console.warn("[Temporary sections] Persistent cache could not be read:", error);
+    return null;
+  }
+}
+async function persistCache2(cache) {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.insert(timetableCache).values({
+      id: cacheKey(cache.data.branch),
+      sourceUrl: cache.sourceUrl,
+      payload: JSON.stringify(cache),
+      fetchedAt: new Date(cache.fetchedAt)
+    }).onDuplicateKeyUpdate({
+      set: { sourceUrl: cache.sourceUrl, payload: JSON.stringify(cache), fetchedAt: new Date(cache.fetchedAt) }
+    });
+  } catch (error) {
+    console.warn("[Temporary sections] Persistent cache could not be saved:", error);
+  }
+}
+async function getKnownCache2(branch) {
+  const existing = inMemoryCache2.get(branch);
+  if (existing) return existing;
+  const persistent = await readPersistentCache2(branch);
+  if (persistent) inMemoryCache2.set(branch, persistent);
+  return persistent;
+}
+async function refreshCache2(branch) {
+  const existing = inFlightRefresh2.get(branch);
+  if (existing) return existing;
+  const request = (async () => {
+    const sourceUrl = await discoverBranchDocument(branch);
+    const students = parseTemporarySectionText(await extractOfficialPdfText(sourceUrl), branch, sourceUrl);
+    const cache = {
+      data: { branch, students },
+      fetchedAt: Date.now(),
+      sourceUrl
+    };
+    inMemoryCache2.set(branch, cache);
+    await persistCache2(cache);
+    return cache;
+  })().finally(() => inFlightRefresh2.delete(branch));
+  inFlightRefresh2.set(branch, request);
+  return request;
+}
+async function getOfficialTemporarySections(branchInput, forceRefresh = false) {
+  const branch = normalizeText2(branchInput).toUpperCase();
+  if (!isBranch(branch)) throw new Error(`Temporary-section lookup is not available for ${branchInput || "this branch"}.`);
+  const previousCache = await getKnownCache2(branch);
+  const fresh = previousCache && Date.now() - previousCache.fetchedAt < TEMPORARY_SECTION_CACHE_TTL_MS;
+  if (!forceRefresh && fresh) return { cache: previousCache, freshness: "fresh", updateError: null };
+  try {
+    return { cache: await refreshCache2(branch), freshness: "fresh", updateError: null };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "The official temporary-section update failed.";
+    console.warn(`[Temporary sections] Official source refresh failed: ${message}`);
+    if (previousCache) return { cache: previousCache, freshness: "stale", updateError: message };
+    throw new Error(`Could not load the official temporary-section details: ${message}`);
+  }
+}
+async function prepareTemporarySectionBranch(branch) {
+  const result = await getOfficialTemporarySections(branch);
+  return {
+    branch: result.cache.data.branch,
+    studentCount: result.cache.data.students.length,
+    fetchedAt: result.cache.fetchedAt,
+    sourceUrl: result.cache.sourceUrl,
+    freshness: result.freshness,
+    updateError: result.updateError
+  };
+}
+async function searchTemporarySectionStudents(branch, query) {
+  const result = await getOfficialTemporarySections(branch);
+  const needle = normalizeSearch(query);
+  const matches = result.cache.data.students.filter((student) => normalizeSearch(student.candidateName).includes(needle)).slice(0, 20).map(({ candidateName, registrationNumber, rollNumber, branch: studentBranch, temporarySection, temporarySubsection }) => ({
+    candidateName,
+    registrationNumber,
+    rollNumber,
+    branch: studentBranch,
+    temporarySection,
+    temporarySubsection
+  }));
+  return { matches, fetchedAt: result.cache.fetchedAt, freshness: result.freshness, updateError: result.updateError };
+}
+async function getTemporarySectionStudent(branch, registrationNumber) {
+  const result = await getOfficialTemporarySections(branch);
+  const student = result.cache.data.students.find((item) => item.registrationNumber === registrationNumber) ?? null;
+  return { student, fetchedAt: result.cache.fetchedAt, freshness: result.freshness, updateError: result.updateError };
+}
+
 // server/routers.ts
 async function loadGroup(group, forceRefresh = false) {
   try {
@@ -567,6 +822,41 @@ var appRouter = router({
     }),
     dashboard: publicProcedure.input(z2.object({ group: z2.string().trim().min(2).max(80) })).query(({ input }) => loadGroup(input.group)),
     refresh: publicProcedure.input(z2.object({ group: z2.string().trim().min(2).max(80) })).mutation(({ input }) => loadGroup(input.group, true))
+  }),
+  temporarySections: router({
+    prepare: publicProcedure.input(z2.object({ branch: z2.string().trim().toUpperCase().min(2).max(5) })).query(async ({ input }) => {
+      try {
+        return await prepareTemporarySectionBranch(input.branch);
+      } catch (error) {
+        throw new TRPCError3({
+          code: "BAD_GATEWAY",
+          message: "We couldn't prepare the official temporary-section list. You can enter your profile manually instead.",
+          cause: error
+        });
+      }
+    }),
+    search: publicProcedure.input(z2.object({ branch: z2.string().trim().toUpperCase().min(2).max(5), query: z2.string().trim().min(2).max(80) })).query(async ({ input }) => {
+      try {
+        return await searchTemporarySectionStudents(input.branch, input.query);
+      } catch (error) {
+        throw new TRPCError3({
+          code: "BAD_GATEWAY",
+          message: "We couldn't load the official temporary-section details. You can enter your profile manually instead.",
+          cause: error
+        });
+      }
+    }),
+    profile: publicProcedure.input(z2.object({ branch: z2.string().trim().toUpperCase().min(2).max(5), registrationNumber: z2.string().trim().regex(/^\d{6,16}$/) })).query(async ({ input }) => {
+      try {
+        return await getTemporarySectionStudent(input.branch, input.registrationNumber);
+      } catch (error) {
+        throw new TRPCError3({
+          code: "BAD_GATEWAY",
+          message: "We couldn't finish the official profile lookup. You can enter your profile manually instead.",
+          cause: error
+        });
+      }
+    })
   })
 });
 
@@ -581,7 +871,7 @@ var HttpError = class extends Error {
 var ForbiddenError = (msg) => new HttpError(403, msg);
 
 // server/_core/sdk.ts
-import axios from "axios";
+import axios2 from "axios";
 import { parse as parseCookieHeader } from "cookie";
 import { SignJWT, jwtVerify } from "jose";
 var isNonEmptyString2 = (value) => typeof value === "string" && value.length > 0;
@@ -624,7 +914,7 @@ var OAuthService = class {
     return data;
   }
 };
-var createOAuthHttpClient = () => axios.create({
+var createOAuthHttpClient = () => axios2.create({
   baseURL: ENV.oAuthServerUrl,
   timeout: AXIOS_TIMEOUT_MS
 });

@@ -8,7 +8,11 @@ export const ANDROID_APP_URL = "https://github.com/lsgzt/nextlecture-android/rel
 export const TIMETABLE_SOURCE_URL =
   "https://appsc.gndec.ac.in/sites/default/files/2026-08/09_08_2026%20FINAL_FILE_subgroups_days_horizontal.html";
 
+/** Official index of the temporary-section documents used for first-run student profiles. */
+export const TEMPORARY_SECTION_SOURCE_PAGE_URL = "https://appsc.gndec.ac.in/time_tables";
+
 /** Public API base path, retained as a clear configuration point for future API hosting changes. */
 export const BACKEND_API_URL = "/api/trpc";
 
 export const TIMETABLE_CACHE_TTL_MS = 30 * 60 * 1000;
+export const TEMPORARY_SECTION_CACHE_TTL_MS = 6 * 60 * 60 * 1000;

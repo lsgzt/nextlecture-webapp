@@ -1,10 +1,13 @@
 import type { Lecture, TimetableResponse } from "@shared/timetable";
-import { AlertCircle, ArrowLeft, CalendarDays, CheckCircle2, ChevronDown, Clock3, CloudOff, ExternalLink, Info, LoaderCircle, MapPin, RefreshCw, Route, Search, UserRound } from "lucide-react";
+import { AlertCircle, ArrowLeft, CalendarDays, CheckCircle2, ChevronDown, Clock3, CloudOff, ExternalLink, Info, LoaderCircle, MapPin, PencilLine, RefreshCw, Route, Search, UserRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { StudentProfileSetup } from "@/components/StudentProfileSetup";
 import { trpc } from "@/lib/trpc";
 import { deriveGroupParts, formatRange, getDayLabel, getNextLecture, getTodayLectures, humanizeDuration, lectureStatus, timeToMinutes } from "@/lib/timetable-ui";
+import { readStoredStudentProfile, saveStudentProfile as persistStudentProfile } from "@/lib/student-profile-storage";
+import type { StudentProfile } from "@shared/student-profile";
 
 const SELECTED_GROUP_KEY = "nextlecture:selected-group";
 const LOCAL_TIMETABLE_KEY = "nextlecture:last-timetable";
@@ -24,6 +27,16 @@ function safelyReadLocalTimetable() {
   } catch {
     return null;
   }
+}
+
+function safelyReadStudentProfile() {
+  return readStoredStudentProfile(localStorage);
+}
+
+function getTemporarySectionBranch(group: string | null) {
+  const code = (group ?? "").toUpperCase();
+  if (/^D\d/.test(code)) return null;
+  return (["RAI", "CE", "CS", "EC", "EE", "IT", "ME"] as const).find(branch => code.includes(branch)) ?? null;
 }
 
 function Freshness({ fetchedAt, freshness, updateError }: { fetchedAt?: number; freshness?: "fresh" | "stale"; updateError?: string | null }) {
@@ -49,6 +62,8 @@ function ScheduleCard({ lecture, now }: { lecture: NonNullable<LocalTimetable>["
 export default function TimetableApp() {
   const [selectedGroup, setSelectedGroup] = useState<string | null>(getInitialSelectedGroup);
   const [localTimetable, setLocalTimetable] = useState<LocalTimetable | null>(safelyReadLocalTimetable);
+  const [studentProfile, setStudentProfile] = useState<StudentProfile | null>(safelyReadStudentProfile);
+  const [showProfileSetup, setShowProfileSetup] = useState(() => !safelyReadStudentProfile());
   const [now, setNow] = useState(() => new Date());
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const [showPicker, setShowPicker] = useState(() => !getInitialSelectedGroup());
@@ -101,6 +116,8 @@ export default function TimetableApp() {
     return coveredByLongLecture ? [] : [{ kind: "free" as const, startTime: slot }];
   }), [data?.timetable.timeSlots, todayLectures]);
   const next = useMemo(() => getNextLecture(data?.timetable ?? null, now), [data?.timetable, now]);
+  const temporarySectionBranch = useMemo(() => getTemporarySectionBranch(selectedGroup), [selectedGroup]);
+  const profileMatchesSelectedBranch = studentProfile?.branch === temporarySectionBranch;
 
   function chooseGroup(code: string) {
     const selected = groups.find(group => group.code === code);
@@ -130,6 +147,12 @@ export default function TimetableApp() {
     refreshMutation.mutate({ group: selectedGroup }, { onSuccess: result => { setLocalTimetable(result); localStorage.setItem(LOCAL_TIMETABLE_KEY, JSON.stringify(result)); utils.timetable.dashboard.invalidate({ group: selectedGroup }); } });
   }
 
+  function saveStudentProfile(profile: StudentProfile) {
+    persistStudentProfile(localStorage, profile);
+    setStudentProfile(profile);
+    setShowProfileSetup(false);
+  }
+
   const greeting = now.getHours() < 12 ? "Good morning" : now.getHours() < 17 ? "Good afternoon" : "Good evening";
 
   return <div className="min-h-screen bg-[#f7f8f6] text-foreground dark:bg-[#101917]"><header className="app-topbar"><div className="container flex h-17 items-center justify-between"><div className="flex items-center gap-3"><Link href="/" className="grid h-9 w-9 place-items-center rounded-xl border border-border bg-card text-muted-foreground transition hover:text-teal-700 dark:hover:text-teal-300" aria-label="Back to NextLecture home"><ArrowLeft className="h-4 w-4" /></Link><div><Link href="/" className="font-display text-lg font-semibold tracking-[-0.04em]">NextLecture</Link><p className="text-[0.65rem] font-semibold tracking-[0.13em] text-teal-700 dark:text-teal-300">GNDEC TIMETABLE</p></div></div><ThemeToggle /></div></header><main className="container max-w-5xl pb-14 pt-7 sm:pt-10">
@@ -138,6 +161,8 @@ export default function TimetableApp() {
     {groupsQuery.isError && !localTimetable && <div className="mx-auto max-w-xl rounded-3xl border border-amber-200 bg-amber-50 p-7 dark:border-amber-900/60 dark:bg-amber-950/25"><AlertCircle className="h-6 w-6 text-amber-700 dark:text-amber-300" /><h1 className="mt-4 font-display text-2xl font-semibold tracking-[-0.045em]">The official timetable is unavailable.</h1><p className="mt-2 leading-7 text-muted-foreground">We couldn’t load a valid timetable yet. Please check your connection and try again.</p><button type="button" onClick={() => groupsQuery.refetch()} className="mt-5 rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-800 active:scale-[0.97]">Try again</button></div>}
     {!groupsQuery.isLoading && !groupsQuery.isError && (!selectedGroup || showPicker) && <GroupPicker groups={groups} selectedGroup={selectedGroup} onSelect={chooseGroup} />}
     {selectedGroup && !showPicker && <div className="space-y-6">
+      {temporarySectionBranch && (!profileMatchesSelectedBranch || showProfileSetup) && <StudentProfileSetup branch={temporarySectionBranch} onSaved={saveStudentProfile} onDismiss={() => setShowProfileSetup(false)} />}
+      {studentProfile && profileMatchesSelectedBranch && !showProfileSetup && <section className="flex flex-col gap-3 rounded-2xl border border-border bg-card px-5 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"><div className="flex min-w-0 items-center gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-teal-50 text-teal-700 dark:bg-teal-950/45 dark:text-teal-300"><UserRound className="h-4 w-4" /></span><div className="min-w-0"><p className="truncate font-semibold">{studentProfile.candidateName}<span className="ml-2 font-normal text-muted-foreground">({studentProfile.registrationNumber})</span></p><p className="mt-0.5 text-sm text-muted-foreground">{studentProfile.temporarySubsection} · {studentProfile.mentorName ?? "Mentor not provided"}{studentProfile.source === "manual" ? " · Manual profile" : ""}</p></div></div><button type="button" onClick={() => setShowProfileSetup(true)} className="inline-flex min-h-10 shrink-0 items-center gap-2 text-sm font-bold text-teal-700 underline decoration-teal-400 underline-offset-4 hover:text-teal-950 dark:text-teal-300 dark:hover:text-white"><PencilLine className="h-4 w-4" />Update profile</button></section>}
       <section className="flex flex-col gap-5 rounded-3xl border border-border bg-card p-5 shadow-sm sm:flex-row sm:items-end sm:justify-between sm:p-7"><div><button type="button" onClick={() => setShowPicker(true)} className="group inline-flex items-center gap-1 rounded-lg py-1 font-display text-2xl font-semibold tracking-[-0.05em] text-foreground transition hover:text-teal-700 dark:hover:text-teal-300">{selectedGroup}<ChevronDown className="h-4 w-4 transition group-hover:translate-y-0.5" /></button><h1 className="mt-1 font-display text-[1.9rem] font-semibold tracking-[-0.055em] sm:text-4xl">{greeting}<span aria-hidden="true">.</span></h1><div className="mt-2"><Freshness fetchedAt={data?.fetchedAt ?? localTimetable?.fetchedAt} freshness={data?.freshness ?? "stale"} updateError={data?.updateError} /></div></div><button type="button" onClick={refresh} disabled={refreshMutation.isPending || !isOnline} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 text-sm font-semibold transition hover:border-teal-700/30 hover:text-teal-700 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:text-teal-300"><RefreshCw className={`h-4 w-4 ${refreshMutation.isPending ? "animate-spin" : ""}`} />{refreshMutation.isPending ? "Fetching timetable…" : "Fetch again"}</button></section>
       {data?.updateError && <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/25 dark:text-amber-100"><Info className="mt-0.5 h-4 w-4 shrink-0" /><span><strong>Couldn’t update the latest timetable.</strong> Your last working timetable is still available.</span></div>}
       {dashboardQuery.isError && !data && <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 dark:border-amber-900/60 dark:bg-amber-950/25"><AlertCircle className="h-5 w-5 text-amber-700 dark:text-amber-300" /><h2 className="mt-3 font-semibold">We couldn’t load this group.</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">The group may have changed in the official source. Choose another group or fetch again.</p><button type="button" onClick={() => setShowPicker(true)} className="mt-4 text-sm font-bold text-teal-700 underline underline-offset-4 dark:text-teal-300">Change timetable group</button></div>}

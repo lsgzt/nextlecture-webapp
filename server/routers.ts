@@ -5,6 +5,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { findGroupTimetable, getOfficialTimetable } from "./timetable";
+import { getTemporarySectionStudent, prepareTemporarySectionBranch, searchTemporarySectionStudents } from "./temporarySections";
 
 async function loadGroup(group: string, forceRefresh = false) {
   try {
@@ -68,6 +69,47 @@ export const appRouter = router({
     refresh: publicProcedure
       .input(z.object({ group: z.string().trim().min(2).max(80) }))
       .mutation(({ input }) => loadGroup(input.group, true)),
+  }),
+  temporarySections: router({
+    prepare: publicProcedure
+      .input(z.object({ branch: z.string().trim().toUpperCase().min(2).max(5) }))
+      .query(async ({ input }) => {
+        try {
+          return await prepareTemporarySectionBranch(input.branch);
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_GATEWAY",
+            message: "We couldn't prepare the official temporary-section list. You can enter your profile manually instead.",
+            cause: error,
+          });
+        }
+      }),
+    search: publicProcedure
+      .input(z.object({ branch: z.string().trim().toUpperCase().min(2).max(5), query: z.string().trim().min(2).max(80) }))
+      .query(async ({ input }) => {
+        try {
+          return await searchTemporarySectionStudents(input.branch, input.query);
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_GATEWAY",
+            message: "We couldn't load the official temporary-section details. You can enter your profile manually instead.",
+            cause: error,
+          });
+        }
+      }),
+    profile: publicProcedure
+      .input(z.object({ branch: z.string().trim().toUpperCase().min(2).max(5), registrationNumber: z.string().trim().regex(/^\d{6,16}$/) }))
+      .query(async ({ input }) => {
+        try {
+          return await getTemporarySectionStudent(input.branch, input.registrationNumber);
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_GATEWAY",
+            message: "We couldn't finish the official profile lookup. You can enter your profile manually instead.",
+            cause: error,
+          });
+        }
+      }),
   }),
 });
 

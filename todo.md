@@ -13,3 +13,14 @@
 - [x] Push the completed source code to the user-provided GitHub repository.
 - [x] Diagnose the Vercel deployment rendering source files instead of the built application.
 - [x] Apply, validate, and push the Vercel deployment configuration fix to GitHub.
+- [x] Inspect the official 2026 temporary-section documents and define the branch-to-PDF mapping and student-profile fields.
+- [x] Implement server-side official-PDF discovery, text extraction, student parsing, duplicate-name matching, and cache behavior.
+- [x] Add first-run branch and name search, duplicate registration-number labels, selected-profile display, and local browser persistence.
+- [x] Add a complete manual profile entry fallback for unavailable or unmatched official information.
+- [x] Add parser and procedure tests and validate mobile onboarding.
+- [ ] Commit and push the verified temporary-section profile feature to GitHub, then verify the deployment update.
+- [x] Make cold first-time temporary-section lookups reliable for every supported branch and re-verify at least two uncached branches.
+- [x] Ensure the profile workflow uses a resilient staged cache path so name search remains available before a live PDF cache is warmed.
+- [x] Add a public branch-cache preparation procedure so first-run students see staged official-PDF preparation rather than a hidden long name-search wait.
+- [x] Validate cold official temporary-section extraction for CE, CS, EC, EE, IT, ME, and RAI and capture the outcome before release.
+- [x] Re-verify first-run mobile profile loading, error, manual-entry, selection, and persisted-profile states after cache-preparation changes.
