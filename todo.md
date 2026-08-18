@@ -26,3 +26,6 @@
 - [x] Validate cold official temporary-section extraction for CE, CS, EC, EE, IT, ME, and RAI and capture the outcome before release.
 - [x] Re-verify first-run mobile profile loading, error, manual-entry, selection, and persisted-profile states after cache-preparation changes.
 - [x] Diagnose and repair the newly reported Vercel deployment error, then verify the live deployment.
+- [x] Replace the header logo and configure the user-provided image as the browser favicon and Apple touch icon.
+- [x] Move the supplied logo into the requested top-right header position on both website routes.
+- [x] Re-verify the top-right header placement on desktop and mobile while retaining favicon and Apple icon support.

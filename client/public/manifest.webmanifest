@@ -7,6 +7,7 @@
   "background_color": "#f7f8f6",
   "theme_color": "#0d9488",
   "icons": [
-    { "src": "/manus-storage/nextlecture-icon_f9c8407e.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    { "src": "/manus-storage/nextlecture-timetable-logo-192_4153f739.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/manus-storage/nextlecture-timetable-logo-512_1db6b380.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }
