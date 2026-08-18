@@ -1,4 +1,4 @@
-import { ANDROID_APP_URL } from "@shared/config";
+import { ANDROID_APP_URL, BRAND_LOGO_URL } from "@shared/config";
 import { ArrowRight, BellRing, BookOpenCheck, CalendarDays, ChevronDown, CircleCheck, ExternalLink, MapPin, Moon, Sparkles, Sun, UsersRound } from "lucide-react";
 import { Link } from "wouter";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -11,7 +11,7 @@ export default function Home() {
       <header className="container sticky top-0 z-20 flex h-18 items-center justify-between border-b border-border/70 bg-background/92 backdrop-blur supports-[backdrop-filter]:bg-background/75">
         <Link href="/" className="group inline-flex items-center gap-2.5 font-display text-[1.1rem] font-semibold tracking-[-0.04em] text-foreground">
           <img
-            src="/manus-storage/nextlecture-timetable-logo-64_792f16c6.png"
+            src={BRAND_LOGO_URL}
             alt="NextLecture timetable logo"
             width={32}
             height={32}

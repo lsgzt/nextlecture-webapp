@@ -4,6 +4,9 @@
  */
 export const ANDROID_APP_URL = "https://github.com/lsgzt/nextlecture-android/releases/latest/download/gndec-timetable.apk";
 
+/** Publicly served logo assets used by deployed headers and device icon metadata. */
+export const BRAND_LOGO_URL = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663345189289/xrndoJiVzCLAnaSr.png";
+
 /** The single official source used by the server-side timetable fetcher. */
 export const TIMETABLE_SOURCE_URL =
   "https://appsc.gndec.ac.in/sites/default/files/2026-08/09_08_2026%20FINAL_FILE_subgroups_days_horizontal.html";
