@@ -24,3 +24,5 @@ A fresh production deployment from current main, `dpl_DwC1ynyCMj2cnGXAqom6RNnGEC
 ## Logo asset delivery diagnosis
 
 Production inspection on August 18 found that the header and icon image paths beneath `/manus-storage/` returned the SPA HTML (`200 text/html`) rather than PNG files on `nextlecture.vercel.app`. The Vercel SPA fallback therefore intercepted these Manus-relative asset paths. This explains the missing header logo, browser favicon, and Apple touch icon despite valid HTML metadata. The repair must reference a publicly served image URL that does not route through Vercel’s single-page application rewrite.
+
+The deployed repair uses direct public PNG URLs from the asset CDN. Production verification confirmed that the header image decodes as `64 × 64`, while the rendered `icon` and `apple-touch-icon` links point to the expected public `64 × 64` and `180 × 180` PNGs, respectively. The repaired Vercel production deployment is `dpl_5gHeWpzbHz9eYQC4i3RPtEMWVKLY` for commit `455d5b9`.
