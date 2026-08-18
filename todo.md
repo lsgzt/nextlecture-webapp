@@ -30,3 +30,4 @@
 - [x] Move the supplied logo into the requested top-right header position on both website routes.
 - [x] Re-verify the top-right header placement on desktop and mobile while retaining favicon and Apple icon support.
 - [x] Restore the missing Vercel Analytics package after integrating the remote analytics component import, then re-verify the branded app build.
+- [x] Move the supplied timetable logo from the top-right to the requested top-left header position on both routes while preserving all device icon settings.

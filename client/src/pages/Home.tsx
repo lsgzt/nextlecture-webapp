@@ -9,13 +9,7 @@ export default function Home() {
   return (
     <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
       <header className="container sticky top-0 z-20 flex h-18 items-center justify-between border-b border-border/70 bg-background/92 backdrop-blur supports-[backdrop-filter]:bg-background/75">
-        <Link href="/" className="group inline-flex items-center gap-2.5 font-display text-[1.1rem] font-semibold tracking-[-0.04em] text-foreground">NextLecture</Link>
-        <nav aria-label="Primary" className="flex items-center gap-2 sm:gap-3">
-          <a className="hidden text-sm font-medium text-muted-foreground transition hover:text-foreground sm:inline-flex" href="#story">Why it exists</a>
-          <ThemeToggle />
-          <Link href="/app" className="rounded-full bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-teal-800/20 transition hover:bg-teal-800 active:scale-[0.97] sm:px-5">
-            Open app
-          </Link>
+        <Link href="/" className="group inline-flex items-center gap-2.5 font-display text-[1.1rem] font-semibold tracking-[-0.04em] text-foreground">
           <img
             src="/manus-storage/nextlecture-timetable-logo-64_792f16c6.png"
             alt="NextLecture timetable logo"
@@ -23,6 +17,14 @@ export default function Home() {
             height={32}
             className="h-8 w-8 shrink-0 rounded-xl object-cover shadow-sm shadow-teal-950/25"
           />
+          <span>NextLecture</span>
+        </Link>
+        <nav aria-label="Primary" className="flex items-center gap-2 sm:gap-3">
+          <a className="hidden text-sm font-medium text-muted-foreground transition hover:text-foreground sm:inline-flex" href="#story">Why it exists</a>
+          <ThemeToggle />
+          <Link href="/app" className="rounded-full bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-teal-800/20 transition hover:bg-teal-800 active:scale-[0.97] sm:px-5">
+            Open app
+          </Link>
         </nav>
       </header>
 
