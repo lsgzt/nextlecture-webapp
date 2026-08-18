@@ -29,3 +29,4 @@
 - [x] Replace the header logo and configure the user-provided image as the browser favicon and Apple touch icon.
 - [x] Move the supplied logo into the requested top-right header position on both website routes.
 - [x] Re-verify the top-right header placement on desktop and mobile while retaining favicon and Apple icon support.
+- [x] Restore the missing Vercel Analytics package after integrating the remote analytics component import, then re-verify the branded app build.
