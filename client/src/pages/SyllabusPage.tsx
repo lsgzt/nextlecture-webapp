@@ -230,7 +230,7 @@ export default function SyllabusPage() {
               {conversations.length ? conversations.map(conversation => (
                 <button key={conversation.id} type="button" onClick={() => { if (!isStreaming) { setActiveConversationId(conversation.id); setError(null); } }} className={`flex w-full items-start gap-2 rounded-xl px-3 py-2.5 text-left transition ${conversation.id === activeConversation?.id ? "bg-teal-50 text-teal-950 dark:bg-teal-950/45 dark:text-teal-100" : "hover:bg-muted/70"}`}>
                   <MessageSquareText className="mt-0.5 h-4 w-4 shrink-0 text-teal-700 dark:text-teal-300" />
-                  <span className="line-clamp-2 break-words text-sm font-medium">{conversation.title}</span>
+                  <span className="min-w-0 line-clamp-2 break-words text-sm font-medium">{conversation.title}</span>
                 </button>
               )) : <p className="px-3 py-7 text-center text-sm leading-6 text-muted-foreground">Your saved syllabus chats will appear here.</p>}
             </div>

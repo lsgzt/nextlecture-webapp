@@ -48,5 +48,6 @@
 - [x] Change the default Syllabus AI model to gemini-3.6-flash while preserving custom user model IDs.
 - [x] Add a secure GEMINI_API_KEY server fallback used only when a device-local Gemini key is absent.
 - [x] Allow students to clear a saved device Gemini key and explicitly return to the configured server fallback while keeping their model preference.
-- [ ] Document that the user must set the optional GEMINI_API_KEY value directly in Vercel environment settings after deployment.
-- [ ] Validate local-key priority, server-key fallback, long-response scrolling, responsive rendering, and production deployment.
+- [x] Document that the user must set the optional GEMINI_API_KEY value directly in Vercel environment settings after deployment.
+- [x] Validate local-key priority routing, no-key fallback configuration response, long-response scrolling, responsive rendering, and production deployment.
+- [ ] Verify a successful live server-key fallback answer after GEMINI_API_KEY is configured in Vercel.

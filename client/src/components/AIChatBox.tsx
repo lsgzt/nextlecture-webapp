@@ -254,10 +254,10 @@ export function AIChatBox({
 
                     <div
                       className={cn(
-                        "min-w-0 max-w-[80%] rounded-lg px-4 py-2.5",
+                        "min-w-0 rounded-lg px-4 py-2.5",
                         message.role === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-foreground"
+                          ? "max-w-[80%] bg-primary text-primary-foreground"
+                          : "flex-1 max-w-[calc(100%-2.75rem)] bg-muted text-foreground"
                       )}
                     >
                       {message.role === "assistant" ? (

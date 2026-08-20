@@ -44,6 +44,7 @@
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }
 
 .syllabus-chat-markdown {
+  width: 100%;
   min-width: 0;
   max-width: 100%;
   overflow-x: auto;
