@@ -35,4 +35,4 @@
 - [x] Inspect the revised GNDEC temporary-section PDFs and map every available student field, using CRN as the roll number and excluding serial number.
 - [x] Update official PDF parsing, cache refresh, shared profile data, and tests for the revised temporary-section format.
 - [x] Update first-run selection and saved-profile display to show all available official student details without serial number.
-- [ ] Validate refreshed profile lookups against the new official PDFs and deploy the verified update.
+- [x] Validate refreshed profile lookups against the new official PDFs and deploy the verified update.

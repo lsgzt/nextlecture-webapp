@@ -25,3 +25,7 @@ Updated-format validation on August 20 completed for IT using the new permanent-
 The mobile onboarding flow was also verified against the refreshed IT cache: searching `Aaditya` returned `Aaditya Koundal`, `ITA1`, mentoring group `ITAM1`, and `CRN 2621001`. No serial-number value is shown in search results.
 
 Cold validation of every revised official branch PDF completed successfully: CE 126, CS 378, EC 126, EE 125, IT 189, ME 126, and RAI 63 student records. Each cold request completed in approximately 11–18 seconds locally; a warmed IT lookup completed in under one second.
+
+Production verification on Vercel also succeeded for the new IT source: the `temporarySections.prepare` endpoint returned the official `IT Permanent Sections 2026.pdf` URL and `studentCount: 189` with a fresh cache result.
+
+The live `temporarySections.profile` CRN lookup for `2621001` returned student name, CRN, both parent names, branch, section, subsection, mentoring group, mentor name, mentor mobile number, venue, source URL, and cache metadata. It did not return a serial-number field.
