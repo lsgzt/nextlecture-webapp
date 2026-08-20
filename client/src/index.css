@@ -53,6 +53,13 @@
   touch-action: pan-x pan-y;
 }
 
+.ai-chat-scroll-area [data-radix-scroll-area-viewport] > div {
+  display: block !important;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .syllabus-chat-markdown :is(pre, table) {
   width: max-content;
   min-width: 100%;
