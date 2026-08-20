@@ -28,13 +28,13 @@ describe("temporary-section tRPC procedures", () => {
       updateError: null,
     });
     temporarySectionMocks.searchTemporarySectionStudents.mockResolvedValue({
-      matches: [{ candidateName: "KOMALPREET KAUR", registrationNumber: "26011555", rollNumber: "98", branch: "IT", temporarySection: "ITB", temporarySubsection: "ITB2" }],
+      matches: [{ studentName: "AADITYA KOUNDAL", crn: "2621001", branch: "IT", section: "ITA", subsection: "ITA1", mentoringGroup: "ITAM1" }],
       fetchedAt: 1_786_968_000_000,
       freshness: "fresh",
       updateError: null,
     });
     temporarySectionMocks.getTemporarySectionStudent.mockResolvedValue({
-      student: { candidateName: "KOMALPREET KAUR", registrationNumber: "26011555", rollNumber: "98", branch: "IT", temporarySection: "ITB", temporarySubsection: "ITB2", mentorName: "Er. Jaspreet Kaur", source: "official", sourceUrl: "https://example.test/it.pdf", savedAt: 1_786_968_000_000 },
+      student: { studentName: "AADITYA KOUNDAL", crn: "2621001", fatherName: "Kapil Dev", motherName: "Monika", branch: "IT", section: "ITA", subsection: "ITA1", mentoringGroup: "ITAM1", mentorName: "Dr. Pankaj Bhambri", mentorMobileNumber: "9814828414", venue: "S213", source: "official", sourceUrl: "https://example.test/it.pdf", savedAt: 1_786_968_000_000 },
       fetchedAt: 1_786_968_000_000,
       freshness: "fresh",
       updateError: null,
@@ -42,9 +42,9 @@ describe("temporary-section tRPC procedures", () => {
   });
 
   it("returns source-derived duplicate-disambiguation fields for a name search", async () => {
-    const result = await createCaller().temporarySections.search({ branch: "IT", query: "Komal" });
-    expect(result.matches[0]).toMatchObject({ candidateName: "KOMALPREET KAUR", registrationNumber: "26011555", rollNumber: "98", temporarySubsection: "ITB2" });
-    expect(temporarySectionMocks.searchTemporarySectionStudents).toHaveBeenCalledWith("IT", "Komal");
+    const result = await createCaller().temporarySections.search({ branch: "IT", query: "Aaditya" });
+    expect(result.matches[0]).toMatchObject({ studentName: "AADITYA KOUNDAL", crn: "2621001", subsection: "ITA1", mentoringGroup: "ITAM1" });
+    expect(temporarySectionMocks.searchTemporarySectionStudents).toHaveBeenCalledWith("IT", "Aaditya");
   });
 
   it("prepares a branch cache before the student begins typing", async () => {
@@ -54,8 +54,8 @@ describe("temporary-section tRPC procedures", () => {
   });
 
   it("returns the complete selected profile from the official document", async () => {
-    const result = await createCaller().temporarySections.profile({ branch: "IT", registrationNumber: "26011555" });
-    expect(result.student).toMatchObject({ registrationNumber: "26011555", mentorName: "Er. Jaspreet Kaur", temporarySubsection: "ITB2" });
+    const result = await createCaller().temporarySections.profile({ branch: "IT", crn: "2621001" });
+    expect(result.student).toMatchObject({ crn: "2621001", mentorName: "Dr. Pankaj Bhambri", subsection: "ITA1", venue: "S213" });
   });
 
   it("returns a safe gateway error when the official document cannot be reached", async () => {

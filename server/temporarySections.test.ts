@@ -4,34 +4,38 @@ import { findBranchDocumentUrl, parseTemporarySectionText } from "./temporarySec
 const sourceUrl = "https://appsc.gndec.ac.in/sites/default/files/2026-08/IT.pdf";
 
 describe("temporary-section PDF parsing", () => {
-  it("extracts source rows, including roll number, registration number, section, subsection, and mentor", () => {
-    const source = `Sr. No. Candidate Name Registration No. Branch T-Section T-Subsection Mentor Name
-      96 KARISHMA 26013850 IT ITB ITB2 Er. Jaspreet Kaur
-      97 KOMALPREET KAUR 26011555 IT ITB ITB2 Er. Jaspreet Kaur
-      98 KOMALPREET KAUR 26014150 IT ITB ITB2 Er. Jaspreet Kaur`;
+  it("extracts every available source field while discarding the serial-number column", () => {
+    const source = `S.No.\tCRN\tStudent Name\tFather Name\tMother Name\tBranch\tSection\tSubsection\tGroup\tMentor Name\tMobile No.\tVenue
+      1\t2621001\tAaditya Koundal\tKapil Dev\tMonika\tIT\tITA\tITA1\tITAM1\tDr. Pankaj Bhambri\t9814828414\tS213
+      2\t2621002\tAaditya Koundal\tBalindawan Pandey\tPooja Pandey\tIT\tITB\tITB1\tITBM1\tDr. Sidharath Jain\t9501011768\tTNP SEMINAR HALL 1`;
 
     const students = parseTemporarySectionText(source, "IT", sourceUrl);
 
-    expect(students).toHaveLength(3);
+    expect(students).toHaveLength(2);
     expect(students[0]).toMatchObject({
-      candidateName: "KARISHMA",
-      rollNumber: "96",
-      registrationNumber: "26013850",
+      studentName: "Aaditya Koundal",
+      crn: "2621001",
+      fatherName: "Kapil Dev",
+      motherName: "Monika",
       branch: "IT",
-      temporarySection: "ITB",
-      temporarySubsection: "ITB2",
-      mentorName: "Er. Jaspreet Kaur",
+      section: "ITA",
+      subsection: "ITA1",
+      mentoringGroup: "ITAM1",
+      mentorName: "Dr. Pankaj Bhambri",
+      mentorMobileNumber: "9814828414",
+      venue: "S213",
       source: "official",
     });
-    expect(students.filter(student => student.candidateName === "KOMALPREET KAUR").map(student => student.registrationNumber)).toEqual(["26011555", "26014150"]);
+    expect(students.map(student => student.crn)).toEqual(["2621001", "2621002"]);
+    expect(students[0]).not.toHaveProperty("serialNumber");
   });
 
   it("discovers the correct branch document rather than relying on a fixed month-specific link", () => {
-    const page = `<a href="/sites/default/files/2026-08/IT%20Branch%20Temporary%20Sections%202026_0.pdf">IT Branch Students</a>`;
-    expect(findBranchDocumentUrl(page, "IT")).toBe("https://appsc.gndec.ac.in/sites/default/files/2026-08/IT%20Branch%20Temporary%20Sections%202026_0.pdf");
+    const page = `<a href="/sites/default/files/2026-08/IT%20Permanent%20Sections%202026.pdf">IT Branch Students</a>`;
+    expect(findBranchDocumentUrl(page, "IT")).toBe("https://appsc.gndec.ac.in/sites/default/files/2026-08/IT%20Permanent%20Sections%202026.pdf");
   });
 
   it("fails safely when no valid rows are present", () => {
-    expect(() => parseTemporarySectionText("Temporary Sections 2026", "IT", sourceUrl)).toThrow(/did not contain readable student rows/i);
+    expect(() => parseTemporarySectionText("Permanent Sections 2026", "IT", sourceUrl)).toThrow(/did not contain readable student rows/i);
   });
 });

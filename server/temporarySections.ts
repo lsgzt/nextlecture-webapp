@@ -1,8 +1,7 @@
 import { load } from "cheerio";
 import axios from "axios";
 import { eq } from "drizzle-orm";
-import { Agent } from "node:https";
-import { extractText, getDocumentProxy } from "unpdf";
+import { getDocumentProxy } from "unpdf";
 import { timetableCache } from "../drizzle/schema";
 import {
   TEMPORARY_SECTION_CACHE_TTL_MS,
@@ -24,15 +23,18 @@ type TemporarySectionFetchResult = {
 };
 
 const REQUEST_TIMEOUT_MS = 25_000;
-const CACHE_PREFIX = "official-gnedc-temporary-section-2026";
-const PDF_RANGE_CHUNK_BYTES = 4 * 1024;
+const CACHE_PREFIX = "official-gnedc-permanent-section-2026-v1";
+const PDF_RANGE_CHUNK_BYTES = 128 * 1024;
 const PDF_RANGE_CONCURRENCY = 8;
 const PDF_RANGE_TIMEOUT_MS = 25_000;
 const PDF_RANGE_RETRIES = 2;
 const MAX_OFFICIAL_PDF_BYTES = 4 * 1024 * 1024;
-const OFFICIAL_HTTPS_AGENT = new Agent({ keepAlive: false, maxSockets: PDF_RANGE_CONCURRENCY });
 const inMemoryCache = new Map<TemporarySectionBranch, TemporarySectionCacheEnvelope>();
 const inFlightRefresh = new Map<TemporarySectionBranch, Promise<TemporarySectionCacheEnvelope>>();
+const PERMANENT_SECTION_COLUMN_STARTS = [0, 45, 82, 185, 295, 395, 435, 475, 525, 565, 675, 720];
+
+type PdfTextItem = { str?: string; transform?: number[] };
+type PdfTextContent = { items: PdfTextItem[] };
 
 function cacheKey(branch: TemporarySectionBranch) {
   return `${CACHE_PREFIX}:${branch}`;
@@ -63,28 +65,32 @@ function isValidEnvelope(value: unknown): value is TemporarySectionCacheEnvelope
 }
 
 /**
- * Parses the source's text-based tables. The 2026 PDFs expose consistent rows:
- * serial number, candidate name, registration number, branch, temporary section,
- * temporary subsection, and mentor name. Repeated page headers are ignored.
+ * Parses column-delimited text reconstructed from the source's revised 2026 permanent-section tables.
+ * The document serial number is deliberately discarded: CRN is the official roll number.
  */
 export function parseTemporarySectionText(text: string, expectedBranch: TemporarySectionBranch, sourceUrl: string) {
-  const normalized = normalizeText(text);
   const students: StudentProfile[] = [];
-  const rowPattern = /(\d{1,4})\s+([A-Z][A-Z .'-]*?)\s+(\d{8})\s+([A-Z]{2,5})\s+([A-Z]{2,5}\d?)\s+([A-Z]{2,5}\d+)\s+((?:DR\.|ER\.)\s+[A-Z][A-Z .'-]*?)(?=\s+\d{1,4}\s+[A-Z]|\s+SR\.\s+NO\.|\s+\*\*|$)/gi;
+  for (const rawLine of text.split(/\r?\n/)) {
+    const columns = rawLine.split("\t").map(normalizeText);
+    if (columns.length < 12) continue;
+    const [, crn, studentName, fatherName, motherName, branch, section, subsection, mentoringGroup, mentorName, mentorMobileNumber, venue] = columns;
+    if (!/^\d{6,16}$/.test(crn) || !studentName || !branch || !section || !subsection) continue;
 
-  for (const match of Array.from(normalized.matchAll(rowPattern))) {
-    const [, serial, name, registration, branch, temporarySection, temporarySubsection, mentor] = match;
-    const recordBranch = normalizeText(branch).toUpperCase();
+    const recordBranch = branch.toUpperCase();
     if (recordBranch !== expectedBranch) continue;
 
     students.push({
-      candidateName: normalizeText(name),
-      registrationNumber: registration,
-      rollNumber: serial,
+      studentName,
+      crn,
+      fatherName: fatherName || null,
+      motherName: motherName || null,
       branch: recordBranch,
-      temporarySection: normalizeText(temporarySection).toUpperCase(),
-      temporarySubsection: normalizeText(temporarySubsection).toUpperCase(),
-      mentorName: normalizeText(mentor) || null,
+      section: section.toUpperCase(),
+      subsection: subsection.toUpperCase(),
+      mentoringGroup: mentoringGroup || null,
+      mentorName: mentorName || null,
+      mentorMobileNumber: mentorMobileNumber || null,
+      venue: venue || null,
       source: "official",
       sourceUrl,
       savedAt: Date.now(),
@@ -92,18 +98,18 @@ export function parseTemporarySectionText(text: string, expectedBranch: Temporar
   }
 
   if (!students.length) {
-    throw new Error(`The official ${expectedBranch} temporary-section document did not contain readable student rows.`);
+    throw new Error(`The official ${expectedBranch} permanent-section document did not contain readable student rows.`);
   }
 
   const seen = new Set<string>();
   return students
     .filter(student => {
-      const key = student.registrationNumber;
+      const key = student.crn;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     })
-    .sort((left, right) => Number(left.rollNumber) - Number(right.rollNumber));
+    .sort((left, right) => left.crn.localeCompare(right.crn, undefined, { numeric: true }));
 }
 
 export function findBranchDocumentUrl(html: string, branch: TemporarySectionBranch) {
@@ -115,9 +121,9 @@ export function findBranchDocumentUrl(html: string, branch: TemporarySectionBran
       const href = $(node).attr("href");
       return { href, decodedHref: href ? decodeURIComponent(href) : "", label: normalizeText($(node).text()).toUpperCase() };
     })
-    .find(link => link.href && /\.pdf(?:$|\?)/i.test(link.href) && link.label.includes(target) && /TEMPORARY\s+SECTION/i.test(link.decodedHref))?.href;
+    .find(link => link.href && /\.pdf(?:$|\?)/i.test(link.href) && link.label.includes(target) && /PERMANENT\s+SECTION/i.test(link.decodedHref))?.href;
 
-  if (!href) throw new Error(`The official website does not currently list a ${branch} temporary-section PDF.`);
+  if (!href) throw new Error(`The official website does not currently list a ${branch} permanent-section PDF.`);
   return new URL(href, TEMPORARY_SECTION_SOURCE_PAGE_URL).toString();
 }
 
@@ -126,7 +132,7 @@ async function discoverBranchDocument(branch: TemporarySectionBranch) {
     headers: { Accept: "text/html,application/xhtml+xml", "User-Agent": "NextLecture/1.0 (GNDEC profile companion)" },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
-  if (!response.ok) throw new Error(`The official temporary-section page responded with ${response.status}.`);
+  if (!response.ok) throw new Error(`The official permanent-section page responded with ${response.status}.`);
   return findBranchDocumentUrl(await response.text(), branch);
 }
 
@@ -147,12 +153,10 @@ async function fetchPdfRange(sourceUrl: string, start: number, end: number) {
         headers: {
           Accept: "application/pdf,application/octet-stream;q=0.9,*/*;q=0.8",
           Range: `bytes=${start}-${end}`,
-          Connection: "close",
           "User-Agent": "NextLecture/1.0 (GNDEC profile companion)",
         },
         responseType: "arraybuffer",
         timeout: PDF_RANGE_TIMEOUT_MS,
-        httpsAgent: OFFICIAL_HTTPS_AGENT,
         maxContentLength: PDF_RANGE_CHUNK_BYTES + 256,
         maxBodyLength: PDF_RANGE_CHUNK_BYTES + 256,
       });
@@ -200,8 +204,36 @@ async function fetchOfficialPdfBytes(sourceUrl: string) {
 async function extractOfficialPdfText(sourceUrl: string) {
   const document = await getDocumentProxy(new Uint8Array(await fetchOfficialPdfBytes(sourceUrl)));
   try {
-    const extracted = await extractText(document, { mergePages: true });
-    return extracted.text;
+    const lines: string[] = [];
+    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+      const page = await document.getPage(pageNumber);
+      const content = (await page.getTextContent()) as unknown as PdfTextContent;
+      const rows = new Map<number, PdfTextItem[]>();
+
+      for (const item of content.items) {
+        const value = normalizeText(item.str ?? "");
+        const transform = item.transform;
+        if (!value || !transform) continue;
+        const rowKey = Math.round(transform[5] ?? 0);
+        rows.set(rowKey, [...(rows.get(rowKey) ?? []), item]);
+      }
+
+      for (const [, row] of Array.from(rows.entries()).sort(([left], [right]) => right - left)) {
+        const columns = Array.from({ length: PERMANENT_SECTION_COLUMN_STARTS.length }, () => "");
+        for (const item of row.sort((left, right) => (left.transform?.[4] ?? 0) - (right.transform?.[4] ?? 0))) {
+          const value = normalizeText(item.str ?? "");
+          const x = item.transform?.[4] ?? 0;
+          let columnIndex = PERMANENT_SECTION_COLUMN_STARTS.findIndex((start, index) => {
+            const nextStart = PERMANENT_SECTION_COLUMN_STARTS[index + 1] ?? Number.POSITIVE_INFINITY;
+            return x >= start && x < nextStart;
+          });
+          if (columnIndex < 0) columnIndex = columns.length - 1;
+          columns[columnIndex] = normalizeText(`${columns[columnIndex]} ${value}`);
+        }
+        lines.push(columns.join("\t"));
+      }
+    }
+    return lines.join("\n");
   } finally {
     await (document as { destroy?: () => Promise<void> | void }).destroy?.();
   }
@@ -308,21 +340,21 @@ export async function searchTemporarySectionStudents(branch: string, query: stri
   const result = await getOfficialTemporarySections(branch);
   const needle = normalizeSearch(query);
   const matches = result.cache.data.students
-    .filter(student => normalizeSearch(student.candidateName).includes(needle))
+    .filter(student => normalizeSearch(student.studentName).includes(needle))
     .slice(0, 20)
-    .map(({ candidateName, registrationNumber, rollNumber, branch: studentBranch, temporarySection, temporarySubsection }) => ({
-      candidateName,
-      registrationNumber,
-      rollNumber,
+    .map(({ studentName, crn, branch: studentBranch, section, subsection, mentoringGroup }) => ({
+      studentName,
+      crn,
       branch: studentBranch,
-      temporarySection,
-      temporarySubsection,
+      section,
+      subsection,
+      mentoringGroup,
     }));
   return { matches, fetchedAt: result.cache.fetchedAt, freshness: result.freshness, updateError: result.updateError };
 }
 
-export async function getTemporarySectionStudent(branch: string, registrationNumber: string) {
+export async function getTemporarySectionStudent(branch: string, crn: string) {
   const result = await getOfficialTemporarySections(branch);
-  const student = result.cache.data.students.find(item => item.registrationNumber === registrationNumber) ?? null;
+  const student = result.cache.data.students.find(item => item.crn === crn) ?? null;
   return { student, fetchedAt: result.cache.fetchedAt, freshness: result.freshness, updateError: result.updateError };
 }

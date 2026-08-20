@@ -99,10 +99,10 @@ export const appRouter = router({
         }
       }),
     profile: publicProcedure
-      .input(z.object({ branch: z.string().trim().toUpperCase().min(2).max(5), registrationNumber: z.string().trim().regex(/^\d{6,16}$/) }))
+      .input(z.object({ branch: z.string().trim().toUpperCase().min(2).max(5), crn: z.string().trim().regex(/^\d{6,16}$/) }))
       .query(async ({ input }) => {
         try {
-          return await getTemporarySectionStudent(input.branch, input.registrationNumber);
+          return await getTemporarySectionStudent(input.branch, input.crn);
         } catch (error) {
           throw new TRPCError({
             code: "BAD_GATEWAY",

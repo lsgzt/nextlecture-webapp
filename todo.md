@@ -32,3 +32,7 @@
 - [x] Restore the missing Vercel Analytics package after integrating the remote analytics component import, then re-verify the branded app build.
 - [x] Move the supplied timetable logo from the top-right to the requested top-left header position on both routes while preserving all device icon settings.
 - [x] Repair Vercel production rendering for the supplied header logo, browser favicon, and Apple touch icon.
+- [x] Inspect the revised GNDEC temporary-section PDFs and map every available student field, using CRN as the roll number and excluding serial number.
+- [x] Update official PDF parsing, cache refresh, shared profile data, and tests for the revised temporary-section format.
+- [x] Update first-run selection and saved-profile display to show all available official student details without serial number.
+- [ ] Validate refreshed profile lookups against the new official PDFs and deploy the verified update.

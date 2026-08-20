@@ -9,21 +9,25 @@ function createStorage() {
 describe("student profile local persistence", () => {
   it("creates and saves a complete manual fallback profile", () => {
     const profile = createManualStudentProfile("IT", {
-      candidateName: "  Sam Singh  ",
-      registrationNumber: " 26015555 ",
-      rollNumber: " 101 ",
-      temporarySection: " ITB ",
-      temporarySubsection: " ITB2 ",
-      mentorName: " Er. Jaspreet Kaur ",
+      studentName: "  Sam Singh  ",
+      crn: " 2621555 ",
+      fatherName: "  Raj Singh  ",
+      motherName: "  Simran Kaur  ",
+      section: " ITB ",
+      subsection: " ITB2 ",
+      mentoringGroup: " ITBM1 ",
+      mentorName: " Dr. Sidharath Jain ",
+      mentorMobileNumber: " 9501011768 ",
+      venue: " TNP Seminar Hall 1 ",
     });
     const storage = createStorage();
     saveStudentProfile(storage, profile);
 
     expect(readStoredStudentProfile(storage)).toMatchObject({
-      candidateName: "Sam Singh",
-      registrationNumber: "26015555",
-      rollNumber: "101",
-      temporarySubsection: "ITB2",
+      studentName: "Sam Singh",
+      crn: "2621555",
+      subsection: "ITB2",
+      mentorMobileNumber: "9501011768",
       source: "manual",
     });
   });
@@ -31,6 +35,6 @@ describe("student profile local persistence", () => {
   it("keeps an invalid or unavailable local profile from breaking onboarding", () => {
     const storage = { getItem: () => "not-json", setItem: () => undefined };
     expect(readStoredStudentProfile(storage)).toBeNull();
-    expect(() => createManualStudentProfile("IT", { candidateName: "", registrationNumber: "", rollNumber: "", temporarySection: "", temporarySubsection: "", mentorName: "" })).toThrow(/required/i);
+    expect(() => createManualStudentProfile("IT", { studentName: "", crn: "", fatherName: "", motherName: "", section: "", subsection: "", mentoringGroup: "", mentorName: "", mentorMobileNumber: "", venue: "" })).toThrow(/required/i);
   });
 });

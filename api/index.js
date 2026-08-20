@@ -515,23 +515,22 @@ function findGroupTimetable(data, requestedGroup) {
 import { load as load2 } from "cheerio";
 import axios from "axios";
 import { eq as eq3 } from "drizzle-orm";
-import { Agent } from "node:https";
-import { extractText, getDocumentProxy } from "unpdf";
+import { getDocumentProxy } from "unpdf";
 
 // shared/student-profile.ts
 var TEMPORARY_SECTION_BRANCHES = ["CE", "CS", "EC", "EE", "IT", "ME", "RAI"];
 
 // server/temporarySections.ts
 var REQUEST_TIMEOUT_MS2 = 25e3;
-var CACHE_PREFIX = "official-gnedc-temporary-section-2026";
-var PDF_RANGE_CHUNK_BYTES = 4 * 1024;
+var CACHE_PREFIX = "official-gnedc-permanent-section-2026-v1";
+var PDF_RANGE_CHUNK_BYTES = 128 * 1024;
 var PDF_RANGE_CONCURRENCY = 8;
 var PDF_RANGE_TIMEOUT_MS = 25e3;
 var PDF_RANGE_RETRIES = 2;
 var MAX_OFFICIAL_PDF_BYTES = 4 * 1024 * 1024;
-var OFFICIAL_HTTPS_AGENT = new Agent({ keepAlive: false, maxSockets: PDF_RANGE_CONCURRENCY });
 var inMemoryCache2 = /* @__PURE__ */ new Map();
 var inFlightRefresh2 = /* @__PURE__ */ new Map();
+var PERMANENT_SECTION_COLUMN_STARTS = [0, 45, 82, 185, 295, 395, 435, 475, 525, 565, 675, 720];
 function cacheKey(branch) {
   return `${CACHE_PREFIX}:${branch}`;
 }
@@ -552,36 +551,41 @@ function isValidEnvelope2(value) {
   );
 }
 function parseTemporarySectionText(text2, expectedBranch, sourceUrl) {
-  const normalized = normalizeText2(text2);
   const students = [];
-  const rowPattern = /(\d{1,4})\s+([A-Z][A-Z .'-]*?)\s+(\d{8})\s+([A-Z]{2,5})\s+([A-Z]{2,5}\d?)\s+([A-Z]{2,5}\d+)\s+((?:DR\.|ER\.)\s+[A-Z][A-Z .'-]*?)(?=\s+\d{1,4}\s+[A-Z]|\s+SR\.\s+NO\.|\s+\*\*|$)/gi;
-  for (const match of Array.from(normalized.matchAll(rowPattern))) {
-    const [, serial, name, registration, branch, temporarySection, temporarySubsection, mentor] = match;
-    const recordBranch = normalizeText2(branch).toUpperCase();
+  for (const rawLine of text2.split(/\r?\n/)) {
+    const columns = rawLine.split("	").map(normalizeText2);
+    if (columns.length < 12) continue;
+    const [, crn, studentName, fatherName, motherName, branch, section, subsection, mentoringGroup, mentorName, mentorMobileNumber, venue] = columns;
+    if (!/^\d{6,16}$/.test(crn) || !studentName || !branch || !section || !subsection) continue;
+    const recordBranch = branch.toUpperCase();
     if (recordBranch !== expectedBranch) continue;
     students.push({
-      candidateName: normalizeText2(name),
-      registrationNumber: registration,
-      rollNumber: serial,
+      studentName,
+      crn,
+      fatherName: fatherName || null,
+      motherName: motherName || null,
       branch: recordBranch,
-      temporarySection: normalizeText2(temporarySection).toUpperCase(),
-      temporarySubsection: normalizeText2(temporarySubsection).toUpperCase(),
-      mentorName: normalizeText2(mentor) || null,
+      section: section.toUpperCase(),
+      subsection: subsection.toUpperCase(),
+      mentoringGroup: mentoringGroup || null,
+      mentorName: mentorName || null,
+      mentorMobileNumber: mentorMobileNumber || null,
+      venue: venue || null,
       source: "official",
       sourceUrl,
       savedAt: Date.now()
     });
   }
   if (!students.length) {
-    throw new Error(`The official ${expectedBranch} temporary-section document did not contain readable student rows.`);
+    throw new Error(`The official ${expectedBranch} permanent-section document did not contain readable student rows.`);
   }
   const seen = /* @__PURE__ */ new Set();
   return students.filter((student) => {
-    const key = student.registrationNumber;
+    const key = student.crn;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
-  }).sort((left, right) => Number(left.rollNumber) - Number(right.rollNumber));
+  }).sort((left, right) => left.crn.localeCompare(right.crn, void 0, { numeric: true }));
 }
 function findBranchDocumentUrl(html, branch) {
   const $ = load2(html);
@@ -589,8 +593,8 @@ function findBranchDocumentUrl(html, branch) {
   const href = $("a").toArray().map((node) => {
     const href2 = $(node).attr("href");
     return { href: href2, decodedHref: href2 ? decodeURIComponent(href2) : "", label: normalizeText2($(node).text()).toUpperCase() };
-  }).find((link) => link.href && /\.pdf(?:$|\?)/i.test(link.href) && link.label.includes(target) && /TEMPORARY\s+SECTION/i.test(link.decodedHref))?.href;
-  if (!href) throw new Error(`The official website does not currently list a ${branch} temporary-section PDF.`);
+  }).find((link) => link.href && /\.pdf(?:$|\?)/i.test(link.href) && link.label.includes(target) && /PERMANENT\s+SECTION/i.test(link.decodedHref))?.href;
+  if (!href) throw new Error(`The official website does not currently list a ${branch} permanent-section PDF.`);
   return new URL(href, TEMPORARY_SECTION_SOURCE_PAGE_URL).toString();
 }
 async function discoverBranchDocument(branch) {
@@ -598,7 +602,7 @@ async function discoverBranchDocument(branch) {
     headers: { Accept: "text/html,application/xhtml+xml", "User-Agent": "NextLecture/1.0 (GNDEC profile companion)" },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS2)
   });
-  if (!response.ok) throw new Error(`The official temporary-section page responded with ${response.status}.`);
+  if (!response.ok) throw new Error(`The official permanent-section page responded with ${response.status}.`);
   return findBranchDocumentUrl(await response.text(), branch);
 }
 function getTotalPdfBytes(contentRange) {
@@ -617,12 +621,10 @@ async function fetchPdfRange(sourceUrl, start, end) {
         headers: {
           Accept: "application/pdf,application/octet-stream;q=0.9,*/*;q=0.8",
           Range: `bytes=${start}-${end}`,
-          Connection: "close",
           "User-Agent": "NextLecture/1.0 (GNDEC profile companion)"
         },
         responseType: "arraybuffer",
         timeout: PDF_RANGE_TIMEOUT_MS,
-        httpsAgent: OFFICIAL_HTTPS_AGENT,
         maxContentLength: PDF_RANGE_CHUNK_BYTES + 256,
         maxBodyLength: PDF_RANGE_CHUNK_BYTES + 256
       });
@@ -661,8 +663,34 @@ async function fetchOfficialPdfBytes(sourceUrl) {
 async function extractOfficialPdfText(sourceUrl) {
   const document = await getDocumentProxy(new Uint8Array(await fetchOfficialPdfBytes(sourceUrl)));
   try {
-    const extracted = await extractText(document, { mergePages: true });
-    return extracted.text;
+    const lines = [];
+    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+      const page = await document.getPage(pageNumber);
+      const content = await page.getTextContent();
+      const rows = /* @__PURE__ */ new Map();
+      for (const item of content.items) {
+        const value = normalizeText2(item.str ?? "");
+        const transform = item.transform;
+        if (!value || !transform) continue;
+        const rowKey = Math.round(transform[5] ?? 0);
+        rows.set(rowKey, [...rows.get(rowKey) ?? [], item]);
+      }
+      for (const [, row] of Array.from(rows.entries()).sort(([left], [right]) => right - left)) {
+        const columns = Array.from({ length: PERMANENT_SECTION_COLUMN_STARTS.length }, () => "");
+        for (const item of row.sort((left, right) => (left.transform?.[4] ?? 0) - (right.transform?.[4] ?? 0))) {
+          const value = normalizeText2(item.str ?? "");
+          const x = item.transform?.[4] ?? 0;
+          let columnIndex = PERMANENT_SECTION_COLUMN_STARTS.findIndex((start, index) => {
+            const nextStart = PERMANENT_SECTION_COLUMN_STARTS[index + 1] ?? Number.POSITIVE_INFINITY;
+            return x >= start && x < nextStart;
+          });
+          if (columnIndex < 0) columnIndex = columns.length - 1;
+          columns[columnIndex] = normalizeText2(`${columns[columnIndex]} ${value}`);
+        }
+        lines.push(columns.join("	"));
+      }
+    }
+    return lines.join("\n");
   } finally {
     await document.destroy?.();
   }
@@ -749,19 +777,19 @@ async function prepareTemporarySectionBranch(branch) {
 async function searchTemporarySectionStudents(branch, query) {
   const result = await getOfficialTemporarySections(branch);
   const needle = normalizeSearch(query);
-  const matches = result.cache.data.students.filter((student) => normalizeSearch(student.candidateName).includes(needle)).slice(0, 20).map(({ candidateName, registrationNumber, rollNumber, branch: studentBranch, temporarySection, temporarySubsection }) => ({
-    candidateName,
-    registrationNumber,
-    rollNumber,
+  const matches = result.cache.data.students.filter((student) => normalizeSearch(student.studentName).includes(needle)).slice(0, 20).map(({ studentName, crn, branch: studentBranch, section, subsection, mentoringGroup }) => ({
+    studentName,
+    crn,
     branch: studentBranch,
-    temporarySection,
-    temporarySubsection
+    section,
+    subsection,
+    mentoringGroup
   }));
   return { matches, fetchedAt: result.cache.fetchedAt, freshness: result.freshness, updateError: result.updateError };
 }
-async function getTemporarySectionStudent(branch, registrationNumber) {
+async function getTemporarySectionStudent(branch, crn) {
   const result = await getOfficialTemporarySections(branch);
-  const student = result.cache.data.students.find((item) => item.registrationNumber === registrationNumber) ?? null;
+  const student = result.cache.data.students.find((item) => item.crn === crn) ?? null;
   return { student, fetchedAt: result.cache.fetchedAt, freshness: result.freshness, updateError: result.updateError };
 }
 
@@ -848,9 +876,9 @@ var appRouter = router({
         });
       }
     }),
-    profile: publicProcedure.input(z2.object({ branch: z2.string().trim().toUpperCase().min(2).max(5), registrationNumber: z2.string().trim().regex(/^\d{6,16}$/) })).query(async ({ input }) => {
+    profile: publicProcedure.input(z2.object({ branch: z2.string().trim().toUpperCase().min(2).max(5), crn: z2.string().trim().regex(/^\d{6,16}$/) })).query(async ({ input }) => {
       try {
-        return await getTemporarySectionStudent(input.branch, input.registrationNumber);
+        return await getTemporarySectionStudent(input.branch, input.crn);
       } catch (error) {
         throw new TRPCError3({
           code: "BAD_GATEWAY",
