@@ -36,3 +36,9 @@
 - [x] Update official PDF parsing, cache refresh, shared profile data, and tests for the revised temporary-section format.
 - [x] Update first-run selection and saved-profile display to show all available official student details without serial number.
 - [x] Validate refreshed profile lookups against the new official PDFs and deploy the verified update.
+- [x] Inspect the official GNDEC Semester 1–2 syllabus PDF and map a reliable retrieval approach for grounded AI answers.
+- [x] Add a Syllabus route and navigation entry with branch-aware context from the locally saved student profile.
+- [x] Add device-local Gemini API key, custom model ID, and local Syllabus AI conversation storage with clear privacy guidance.
+- [x] Implement Gemini streaming requests using the official syllabus PDF and a strict grounding prompt that requires complete, structured answers.
+- [x] Build formatted Markdown answer rendering, follow-up chat, new-chat controls, saved conversation list, and example prompts.
+- [ ] Add tests and verify syllabus PDF retrieval, streaming behavior, local persistence, responsive UI, and production deployment.

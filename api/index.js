@@ -229,8 +229,10 @@ var timetableCache = mysqlTable("timetable_cache", {
 // shared/config.ts
 var TIMETABLE_SOURCE_URL = "https://appsc.gndec.ac.in/sites/default/files/2026-08/09_08_2026%20FINAL_FILE_subgroups_days_horizontal.html";
 var TEMPORARY_SECTION_SOURCE_PAGE_URL = "https://appsc.gndec.ac.in/time_tables";
+var SYLLABUS_SOURCE_URL = "https://appsc.gndec.ac.in/sites/default/files/2026-03/ss%20and%20Syllabus%20sem1%2C2%20Dec%202025%20unsigned.pdf";
 var TIMETABLE_CACHE_TTL_MS = 30 * 60 * 1e3;
 var TEMPORARY_SECTION_CACHE_TTL_MS = 6 * 60 * 60 * 1e3;
+var SYLLABUS_CACHE_TTL_MS = 24 * 60 * 60 * 1e3;
 
 // shared/timetable.ts
 var WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
@@ -436,19 +438,19 @@ async function readPersistentCache() {
     return null;
   }
 }
-async function persistCache(cache) {
+async function persistCache(cache2) {
   const db = await getDb();
   if (!db) return;
   try {
     await db.insert(timetableCache).values({
       id: CACHE_KEY,
       sourceUrl: TIMETABLE_SOURCE_URL,
-      payload: JSON.stringify(cache),
-      fetchedAt: new Date(cache.fetchedAt)
+      payload: JSON.stringify(cache2),
+      fetchedAt: new Date(cache2.fetchedAt)
     }).onDuplicateKeyUpdate({
       set: {
-        payload: JSON.stringify(cache),
-        fetchedAt: new Date(cache.fetchedAt)
+        payload: JSON.stringify(cache2),
+        fetchedAt: new Date(cache2.fetchedAt)
       }
     });
   } catch (error) {
@@ -474,10 +476,10 @@ async function fetchAndParseOfficialTimetable() {
 }
 async function refreshCache() {
   if (!inFlightRefresh) {
-    inFlightRefresh = fetchAndParseOfficialTimetable().then(async (cache) => {
-      inMemoryCache = cache;
-      await persistCache(cache);
-      return cache;
+    inFlightRefresh = fetchAndParseOfficialTimetable().then(async (cache2) => {
+      inMemoryCache = cache2;
+      await persistCache(cache2);
+      return cache2;
     }).finally(() => {
       inFlightRefresh = null;
     });
@@ -496,8 +498,8 @@ async function getOfficialTimetable(forceRefresh = false) {
     return { cache: previousCache, freshness: "fresh", updateError: null };
   }
   try {
-    const cache = await refreshCache();
-    return { cache, freshness: "fresh", updateError: null };
+    const cache2 = await refreshCache();
+    return { cache: cache2, freshness: "fresh", updateError: null };
   } catch (error) {
     const message = error instanceof Error ? error.message : "The timetable update failed.";
     if (previousCache) {
@@ -545,9 +547,9 @@ function isBranch(value) {
 }
 function isValidEnvelope2(value) {
   if (!value || typeof value !== "object") return false;
-  const cache = value;
+  const cache2 = value;
   return Boolean(
-    cache.data && isBranch(cache.data.branch ?? "") && Array.isArray(cache.data.students) && typeof cache.fetchedAt === "number" && typeof cache.sourceUrl === "string"
+    cache2.data && isBranch(cache2.data.branch ?? "") && Array.isArray(cache2.data.students) && typeof cache2.fetchedAt === "number" && typeof cache2.sourceUrl === "string"
   );
 }
 function parseTemporarySectionText(text2, expectedBranch, sourceUrl) {
@@ -707,17 +709,17 @@ async function readPersistentCache2(branch) {
     return null;
   }
 }
-async function persistCache2(cache) {
+async function persistCache2(cache2) {
   const db = await getDb();
   if (!db) return;
   try {
     await db.insert(timetableCache).values({
-      id: cacheKey(cache.data.branch),
-      sourceUrl: cache.sourceUrl,
-      payload: JSON.stringify(cache),
-      fetchedAt: new Date(cache.fetchedAt)
+      id: cacheKey(cache2.data.branch),
+      sourceUrl: cache2.sourceUrl,
+      payload: JSON.stringify(cache2),
+      fetchedAt: new Date(cache2.fetchedAt)
     }).onDuplicateKeyUpdate({
-      set: { sourceUrl: cache.sourceUrl, payload: JSON.stringify(cache), fetchedAt: new Date(cache.fetchedAt) }
+      set: { sourceUrl: cache2.sourceUrl, payload: JSON.stringify(cache2), fetchedAt: new Date(cache2.fetchedAt) }
     });
   } catch (error) {
     console.warn("[Temporary sections] Persistent cache could not be saved:", error);
@@ -736,14 +738,14 @@ async function refreshCache2(branch) {
   const request = (async () => {
     const sourceUrl = await discoverBranchDocument(branch);
     const students = parseTemporarySectionText(await extractOfficialPdfText(sourceUrl), branch, sourceUrl);
-    const cache = {
+    const cache2 = {
       data: { branch, students },
       fetchedAt: Date.now(),
       sourceUrl
     };
-    inMemoryCache2.set(branch, cache);
-    await persistCache2(cache);
-    return cache;
+    inMemoryCache2.set(branch, cache2);
+    await persistCache2(cache2);
+    return cache2;
   })().finally(() => inFlightRefresh2.delete(branch));
   inFlightRefresh2.set(branch, request);
   return request;
@@ -791,6 +793,75 @@ async function getTemporarySectionStudent(branch, crn) {
   const result = await getOfficialTemporarySections(branch);
   const student = result.cache.data.students.find((item) => item.crn === crn) ?? null;
   return { student, fetchedAt: result.cache.fetchedAt, freshness: result.freshness, updateError: result.updateError };
+}
+
+// server/syllabus.ts
+import axios2 from "axios";
+var cache = null;
+var inFlight = null;
+var MAX_SYLLABUS_BYTES = 8 * 1024 * 1024;
+var PDF_RANGE_CHUNK_BYTES2 = 128 * 1024;
+var PDF_RANGE_CONCURRENCY2 = 8;
+async function fetchSyllabusRange(start, end) {
+  const response = await axios2.get(SYLLABUS_SOURCE_URL, {
+    responseType: "arraybuffer",
+    timeout: 25e3,
+    maxContentLength: PDF_RANGE_CHUNK_BYTES2 + 1024,
+    maxBodyLength: PDF_RANGE_CHUNK_BYTES2 + 1024,
+    headers: {
+      Accept: "application/pdf,application/octet-stream;q=0.9,*/*;q=0.8",
+      Range: `bytes=${start}-${end}`,
+      "User-Agent": "NextLecture/1.0 (GNDEC syllabus companion)"
+    }
+  });
+  return { bytes: Buffer.from(response.data), headers: response.headers, status: response.status };
+}
+function readTotalBytes(contentRange) {
+  const match = String(contentRange ?? "").match(/bytes\s+\d+-\d+\/(\d+)/i);
+  const total = match ? Number(match[1]) : NaN;
+  return Number.isSafeInteger(total) && total > 0 ? total : null;
+}
+async function fetchOfficialSyllabusBytes() {
+  const first = await fetchSyllabusRange(0, PDF_RANGE_CHUNK_BYTES2 - 1);
+  const totalBytes = readTotalBytes(first.headers["content-range"]);
+  if (first.status !== 206 || !totalBytes) return first.bytes;
+  if (totalBytes > MAX_SYLLABUS_BYTES) throw new Error("The official syllabus PDF is larger than the supported safety limit.");
+  const chunks = [first.bytes];
+  const ranges = Array.from({ length: Math.ceil(totalBytes / PDF_RANGE_CHUNK_BYTES2) - 1 }, (_, index) => {
+    const start = (index + 1) * PDF_RANGE_CHUNK_BYTES2;
+    return { start, end: Math.min(totalBytes - 1, start + PDF_RANGE_CHUNK_BYTES2 - 1) };
+  });
+  for (let offset = 0; offset < ranges.length; offset += PDF_RANGE_CONCURRENCY2) {
+    const group = await Promise.all(ranges.slice(offset, offset + PDF_RANGE_CONCURRENCY2).map((range) => fetchSyllabusRange(range.start, range.end)));
+    chunks.push(...group.map((result) => result.bytes));
+  }
+  return Buffer.concat(chunks).subarray(0, totalBytes);
+}
+async function getOfficialSyllabusPdfBuffer(force = false) {
+  if (!force && cache && Date.now() - cache.fetchedAt < SYLLABUS_CACHE_TTL_MS) return cache;
+  if (!force && inFlight) return inFlight;
+  const load3 = async () => {
+    const bytes = await fetchOfficialSyllabusBytes();
+    if (!bytes.length || bytes.length > MAX_SYLLABUS_BYTES || !bytes.subarray(0, 4).equals(Buffer.from("%PDF"))) {
+      throw new Error("The official syllabus source did not return a valid PDF document.");
+    }
+    cache = { bytes, fetchedAt: Date.now() };
+    return cache;
+  };
+  inFlight = load3().finally(() => {
+    inFlight = null;
+  });
+  return inFlight;
+}
+async function getOfficialSyllabusDocument(force = false) {
+  const syllabus = await getOfficialSyllabusPdfBuffer(force);
+  return {
+    base64: syllabus.bytes.toString("base64"),
+    mimeType: "application/pdf",
+    sourceUrl: SYLLABUS_SOURCE_URL,
+    fetchedAt: syllabus.fetchedAt,
+    byteLength: syllabus.bytes.length
+  };
 }
 
 // server/routers.ts
@@ -887,6 +958,15 @@ var appRouter = router({
         });
       }
     })
+  }),
+  syllabus: router({
+    document: publicProcedure.query(async () => {
+      try {
+        return await getOfficialSyllabusDocument();
+      } catch (error) {
+        throw new TRPCError3({ code: "BAD_GATEWAY", message: "We couldn't load the official syllabus PDF. Please try again shortly.", cause: error });
+      }
+    })
   })
 });
 
@@ -901,7 +981,7 @@ var HttpError = class extends Error {
 var ForbiddenError = (msg) => new HttpError(403, msg);
 
 // server/_core/sdk.ts
-import axios2 from "axios";
+import axios3 from "axios";
 import { parse as parseCookieHeader } from "cookie";
 import { SignJWT, jwtVerify } from "jose";
 var isNonEmptyString2 = (value) => typeof value === "string" && value.length > 0;
@@ -944,7 +1024,7 @@ var OAuthService = class {
     return data;
   }
 };
-var createOAuthHttpClient = () => axios2.create({
+var createOAuthHttpClient = () => axios3.create({
   baseURL: ENV.oAuthServerUrl,
   timeout: AXIOS_TIMEOUT_MS
 });
@@ -1259,6 +1339,19 @@ function createApp() {
   app2.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app2);
   registerOAuthRoutes(app2);
+  app2.get("/api/syllabus.pdf", async (_req, res) => {
+    try {
+      const syllabus = await getOfficialSyllabusPdfBuffer();
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Length", syllabus.bytes.length);
+      res.setHeader("Cache-Control", "public, max-age=3600, s-maxage=3600");
+      res.setHeader("X-NextLecture-Syllabus-Fetched-At", String(syllabus.fetchedAt));
+      res.send(syllabus.bytes);
+    } catch (error) {
+      console.error("[Syllabus] Official PDF retrieval failed:", error instanceof Error ? error.message : error);
+      res.status(502).json({ message: "The official syllabus PDF is unavailable right now. Please try again shortly." });
+    }
+  });
   app2.use(
     "/api/trpc",
     createExpressMiddleware({

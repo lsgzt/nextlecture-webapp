@@ -14,8 +14,12 @@ export const TIMETABLE_SOURCE_URL =
 /** Official index of the temporary-section documents used for first-run student profiles. */
 export const TEMPORARY_SECTION_SOURCE_PAGE_URL = "https://appsc.gndec.ac.in/time_tables";
 
+/** Official first-year syllabus PDF used only as Gemini document grounding for the Syllabus AI feature. */
+export const SYLLABUS_SOURCE_URL = "https://appsc.gndec.ac.in/sites/default/files/2026-03/ss%20and%20Syllabus%20sem1%2C2%20Dec%202025%20unsigned.pdf";
+
 /** Public API base path, retained as a clear configuration point for future API hosting changes. */
 export const BACKEND_API_URL = "/api/trpc";
 
 export const TIMETABLE_CACHE_TTL_MS = 30 * 60 * 1000;
 export const TEMPORARY_SECTION_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+export const SYLLABUS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;

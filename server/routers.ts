@@ -6,6 +6,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { findGroupTimetable, getOfficialTimetable } from "./timetable";
 import { getTemporarySectionStudent, prepareTemporarySectionBranch, searchTemporarySectionStudents } from "./temporarySections";
+import { getOfficialSyllabusDocument } from "./syllabus";
 
 async function loadGroup(group: string, forceRefresh = false) {
   try {
@@ -111,6 +112,15 @@ export const appRouter = router({
           });
         }
       }),
+  }),
+  syllabus: router({
+    document: publicProcedure.query(async () => {
+      try {
+        return await getOfficialSyllabusDocument();
+      } catch (error) {
+        throw new TRPCError({ code: "BAD_GATEWAY", message: "We couldn't load the official syllabus PDF. Please try again shortly.", cause: error });
+      }
+    }),
   }),
 });
 

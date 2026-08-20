@@ -29,3 +29,9 @@ Cold validation of every revised official branch PDF completed successfully: CE 
 Production verification on Vercel also succeeded for the new IT source: the `temporarySections.prepare` endpoint returned the official `IT Permanent Sections 2026.pdf` URL and `studentCount: 189` with a fresh cache result.
 
 The live `temporarySections.profile` CRN lookup for `2621001` returned student name, CRN, both parent names, branch, section, subsection, mentoring group, mentor name, mentor mobile number, venue, source URL, and cache metadata. It did not return a serial-number field.
+
+## Syllabus AI official source
+
+Syllabus AI uses the official GNDEC document at `https://appsc.gndec.ac.in/sites/default/files/2026-03/ss%20and%20Syllabus%20sem1%2C2%20Dec%202025%20unsigned.pdf`. Validation on August 20 confirmed a 33-page, 1,110,068-byte PDF covering the 2024 first-year common curriculum for Semesters 1–2, including the study scheme and course-level pages such as Physics, Mathematics, Chemistry, Professional English, Basic Electrical and Electronics Engineering, and Programming Fundamentals using Python.
+
+The official host does not grant browser CORS access to this PDF. NextLecture therefore retrieves and validates the document server-side with bounded byte ranges, caches the binary payload for 24 hours, and supplies it through a same-origin `/api/syllabus.pdf` endpoint. The client turns that binary response into Gemini PDF input only after a student starts a request. Gemini API keys are never sent to NextLecture; they remain in device-local storage and are sent straight to Gemini in the `x-goog-api-key` request header.
