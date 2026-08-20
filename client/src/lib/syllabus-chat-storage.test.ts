@@ -13,6 +13,12 @@ describe("syllabus AI local storage", () => {
     expect(readGeminiSyllabusSettings(storage)).toEqual({ apiKey: "test-key", modelId: "models/custom-syllabus-model" });
   });
 
+  it("preserves a model preference when the user intentionally relies on the server fallback key", () => {
+    const storage = createStorage();
+    saveGeminiSyllabusSettings(storage, { apiKey: "", modelId: "gemini-3.6-flash" });
+    expect(readGeminiSyllabusSettings(storage)).toEqual({ apiKey: "", modelId: "gemini-3.6-flash" });
+  });
+
   it("preserves recent local syllabus conversations and ignores malformed records", () => {
     const storage = createStorage();
     const conversation = createSyllabusConversation(1);

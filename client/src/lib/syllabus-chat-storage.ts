@@ -27,7 +27,7 @@ export function readGeminiSyllabusSettings(storage: StorageLike): GeminiSyllabus
     const raw = storage.getItem(SETTINGS_KEY);
     if (!raw) return null;
     const settings = JSON.parse(raw) as Partial<GeminiSyllabusSettings>;
-    if (!settings || typeof settings.apiKey !== "string" || !settings.apiKey.trim()) return null;
+    if (!settings || typeof settings.apiKey !== "string") return null;
     return { apiKey: settings.apiKey.trim(), modelId: settings.modelId?.trim() || DEFAULT_GEMINI_MODEL_ID };
   } catch {
     return null;
@@ -35,9 +35,7 @@ export function readGeminiSyllabusSettings(storage: StorageLike): GeminiSyllabus
 }
 
 export function saveGeminiSyllabusSettings(storage: StorageLike, settings: GeminiSyllabusSettings) {
-  const apiKey = settings.apiKey.trim();
-  if (!apiKey) throw new Error("A Gemini API key is required.");
-  storage.setItem(SETTINGS_KEY, JSON.stringify({ apiKey, modelId: settings.modelId.trim() || DEFAULT_GEMINI_MODEL_ID }));
+  storage.setItem(SETTINGS_KEY, JSON.stringify({ apiKey: settings.apiKey.trim(), modelId: settings.modelId.trim() || DEFAULT_GEMINI_MODEL_ID }));
 }
 
 export function readSyllabusConversations(storage: StorageLike): SyllabusConversation[] {

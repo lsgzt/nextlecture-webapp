@@ -42,3 +42,28 @@
 @media (min-width: 1024px) { .container { max-width: 1280px; padding-left: 2rem; padding-right: 2rem; } }
 @media (prefers-reduced-motion: no-preference) { a, button, input, select { transition-duration: 160ms; transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1); } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }
+
+.syllabus-chat-markdown {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-inline: contain;
+  touch-action: pan-x pan-y;
+}
+
+.syllabus-chat-markdown :is(pre, table) {
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
+}
+
+.syllabus-chat-markdown :is(td, th) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.syllabus-chat-markdown :is(code, a) {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}

@@ -41,4 +41,12 @@
 - [x] Add device-local Gemini API key, custom model ID, and local Syllabus AI conversation storage with clear privacy guidance.
 - [x] Implement Gemini streaming requests using the official syllabus PDF and a strict grounding prompt that requires complete, structured answers.
 - [x] Build formatted Markdown answer rendering, follow-up chat, new-chat controls, saved conversation list, and example prompts.
-- [ ] Add tests and verify syllabus PDF retrieval, streaming behavior, local persistence, responsive UI, and production deployment.
+- [x] Add tests and verify syllabus PDF retrieval, streaming behavior, local persistence, responsive UI, and production deployment.
+- [ ] Verify a real Gemini streamed first answer and follow-up with a user-provided API key and model ID against the official syllabus PDF.
+- [ ] Verify browser-local chat persistence by reloading a completed live Syllabus AI conversation and continuing it.
+- [x] Fix horizontal overflow for long Syllabus AI messages, Markdown tables, and conversation titles on mobile and desktop.
+- [x] Change the default Syllabus AI model to gemini-3.6-flash while preserving custom user model IDs.
+- [x] Add a secure GEMINI_API_KEY server fallback used only when a device-local Gemini key is absent.
+- [x] Allow students to clear a saved device Gemini key and explicitly return to the configured server fallback while keeping their model preference.
+- [ ] Document that the user must set the optional GEMINI_API_KEY value directly in Vercel environment settings after deployment.
+- [ ] Validate local-key priority, server-key fallback, long-response scrolling, responsive rendering, and production deployment.

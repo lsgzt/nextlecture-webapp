@@ -1332,6 +1332,67 @@ function registerStorageProxy(app2) {
   });
 }
 
+// shared/syllabus-chat.ts
+var DEFAULT_GEMINI_MODEL_ID = "gemini-3.6-flash";
+
+// shared/syllabus-prompt.ts
+function buildSyllabusSystemInstruction(profile) {
+  const branch = profile?.branch ?? "not available";
+  return `You are NextLecture Syllabus AI. You answer questions only from the attached official GNDEC B.Tech Semester 1\u20132 syllabus PDF. The student branch saved on this device is ${branch}.
+
+Non-negotiable rules:
+1. Treat the attached PDF as the sole source of truth. Do not use outside knowledge, assumptions, recollection, or invented course content.
+2. Identify the exact semester, subject, course code, and branch applicability from the PDF before answering. If the request is ambiguous, state the matching possibilities from the document and ask for the missing course title, course code, or semester.
+3. For a syllabus request, include every listed unit in its original order. Preserve all named topics, subtopics, practical components, outcomes, hours, marks, prerequisites, and assessment details when they are present in the PDF. Never summarize away a unit or topic.
+4. Clearly distinguish facts in the document from anything the document does not state. If the answer is not in the PDF, say \u201CNot stated in the official syllabus PDF.\u201D
+5. Use clean Markdown: headings, bold labels, ordered unit lists, and tables only when they improve clarity. Do not use unsupported citations or URLs.
+6. End substantive answers with a concise source note naming the course code/title and PDF page number(s) whenever you can identify them.
+7. Follow-up questions must remain grounded in the same attached PDF and the preceding conversation. Do not claim that a topic is included unless it appears in the document.`;
+}
+
+// server/syllabusGemini.ts
+function getConfiguredGeminiApiKey() {
+  return process.env.GEMINI_API_KEY?.trim() || null;
+}
+function normalizeServerGeminiModelId(modelId) {
+  return typeof modelId === "string" && modelId.trim() ? modelId.trim().replace(/^models\//i, "") : DEFAULT_GEMINI_MODEL_ID;
+}
+function normalizeHistory(value) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(-16).flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const message = item;
+    if (message.role !== "user" && message.role !== "assistant" || typeof message.content !== "string") return [];
+    const content = message.content.trim().slice(0, 12e3);
+    return content ? [{ id: message.id ?? "server-history", role: message.role, content, createdAt: message.createdAt ?? 0 }] : [];
+  });
+}
+async function createServerFallbackGeminiResponse(request, signal) {
+  const apiKey = getConfiguredGeminiApiKey();
+  if (!apiKey) throw new Error("GEMINI_API_KEY is not configured on this deployment.");
+  const question = typeof request.question === "string" ? request.question.trim().slice(0, 12e3) : "";
+  if (!question) throw new Error("A syllabus question is required.");
+  const profile = request.profile ?? null;
+  const history = normalizeHistory(request.history);
+  const document = await getOfficialSyllabusDocument();
+  return fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(normalizeServerGeminiModelId(request.modelId))}:streamGenerateContent?alt=sse`, {
+    method: "POST",
+    signal,
+    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: buildSyllabusSystemInstruction(profile) }] },
+      contents: [
+        ...history.map((message) => ({ role: message.role === "assistant" ? "model" : "user", parts: [{ text: message.content }] })),
+        { role: "user", parts: [{ inlineData: { mimeType: document.mimeType, data: document.base64 } }, { text: `Official source: ${document.sourceUrl}
+Student branch: ${profile?.branch ?? "not available"}
+
+Question: ${question}` }] }
+      ],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 8192 }
+    })
+  });
+}
+
 // server/app.ts
 function createApp() {
   const app2 = express();
@@ -1350,6 +1411,38 @@ function createApp() {
     } catch (error) {
       console.error("[Syllabus] Official PDF retrieval failed:", error instanceof Error ? error.message : error);
       res.status(502).json({ message: "The official syllabus PDF is unavailable right now. Please try again shortly." });
+    }
+  });
+  app2.post("/api/syllabus/stream", async (req, res) => {
+    if (!getConfiguredGeminiApiKey()) {
+      res.status(503).json({ message: "Syllabus AI server fallback is not configured. Add GEMINI_API_KEY in Vercel environment settings or add a device-local Gemini key in AI settings." });
+      return;
+    }
+    try {
+      const upstream = await createServerFallbackGeminiResponse(req.body);
+      if (!upstream.ok || !upstream.body) {
+        res.status(upstream.status || 502).json({ message: "Gemini could not start the Syllabus AI response. Please try again shortly." });
+        return;
+      }
+      res.status(200);
+      res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("Connection", "keep-alive");
+      const reader = upstream.body.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (value) res.write(Buffer.from(value));
+          if (done) break;
+        }
+      } finally {
+        reader.releaseLock();
+      }
+      res.end();
+    } catch (error) {
+      console.error("[Syllabus] Gemini fallback failed:", error instanceof Error ? error.message : error);
+      if (!res.headersSent) res.status(502).json({ message: "Syllabus AI could not complete the response. Check GEMINI_API_KEY or add a device-local key in AI settings." });
+      else res.end();
     }
   });
   app2.use(

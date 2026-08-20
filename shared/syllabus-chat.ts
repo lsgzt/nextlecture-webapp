@@ -1,4 +1,4 @@
-export const DEFAULT_GEMINI_MODEL_ID = "gemini-2.5-flash";
+export const DEFAULT_GEMINI_MODEL_ID = "gemini-3.6-flash";
 
 export type SyllabusChatRole = "user" | "assistant";
 

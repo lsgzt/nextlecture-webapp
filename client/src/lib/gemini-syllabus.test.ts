@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildSyllabusSystemInstruction, extractGeminiStreamText, normalizeGeminiModelId, streamGeminiSyllabusAnswer } from "./gemini-syllabus";
+import { buildSyllabusSystemInstruction } from "@shared/syllabus-prompt";
+import { extractGeminiStreamText, normalizeGeminiModelId, streamGeminiSyllabusAnswer } from "./gemini-syllabus";
 
 describe("Gemini syllabus request helpers", () => {
   it("normalizes custom model IDs and creates a branch-aware grounded instruction", () => {

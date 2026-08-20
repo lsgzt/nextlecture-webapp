@@ -5,6 +5,7 @@ import { createContext } from "./_core/context";
 import { registerOAuthRoutes } from "./_core/oauth";
 import { registerStorageProxy } from "./_core/storageProxy";
 import { getOfficialSyllabusPdfBuffer } from "./syllabus";
+import { createServerFallbackGeminiResponse, getConfiguredGeminiApiKey } from "./syllabusGemini";
 
 /**
  * Creates the shared HTTP application for local hosting and serverless adapters.
@@ -28,6 +29,38 @@ export function createApp() {
     } catch (error) {
       console.error("[Syllabus] Official PDF retrieval failed:", error instanceof Error ? error.message : error);
       res.status(502).json({ message: "The official syllabus PDF is unavailable right now. Please try again shortly." });
+    }
+  });
+  app.post("/api/syllabus/stream", async (req, res) => {
+    if (!getConfiguredGeminiApiKey()) {
+      res.status(503).json({ message: "Syllabus AI server fallback is not configured. Add GEMINI_API_KEY in Vercel environment settings or add a device-local Gemini key in AI settings." });
+      return;
+    }
+    try {
+      const upstream = await createServerFallbackGeminiResponse(req.body);
+      if (!upstream.ok || !upstream.body) {
+        res.status(upstream.status || 502).json({ message: "Gemini could not start the Syllabus AI response. Please try again shortly." });
+        return;
+      }
+      res.status(200);
+      res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("Connection", "keep-alive");
+      const reader = upstream.body.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (value) res.write(Buffer.from(value));
+          if (done) break;
+        }
+      } finally {
+        reader.releaseLock();
+      }
+      res.end();
+    } catch (error) {
+      console.error("[Syllabus] Gemini fallback failed:", error instanceof Error ? error.message : error);
+      if (!res.headersSent) res.status(502).json({ message: "Syllabus AI could not complete the response. Check GEMINI_API_KEY or add a device-local key in AI settings." });
+      else res.end();
     }
   });
   app.use(
