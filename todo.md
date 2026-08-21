@@ -42,12 +42,15 @@
 - [x] Implement Gemini streaming requests using the official syllabus PDF and a strict grounding prompt that requires complete, structured answers.
 - [x] Build formatted Markdown answer rendering, follow-up chat, new-chat controls, saved conversation list, and example prompts.
 - [x] Add tests and verify syllabus PDF retrieval, streaming behavior, local persistence, responsive UI, and production deployment.
-- [ ] Verify a real Gemini streamed first answer and follow-up with a user-provided API key and model ID against the official syllabus PDF.
-- [ ] Verify browser-local chat persistence by reloading a completed live Syllabus AI conversation and continuing it.
+- [x] Verify a real Gemini streamed first answer and follow-up with a user-provided API key and model ID against the official syllabus PDF.
+- [x] Verify browser-local chat persistence by reloading a completed live Syllabus AI conversation and continuing it.
 - [x] Fix horizontal overflow for long Syllabus AI messages, Markdown tables, and conversation titles on mobile and desktop.
 - [x] Change the default Syllabus AI model to gemini-3.6-flash while preserving custom user model IDs.
 - [x] Add a secure GEMINI_API_KEY server fallback used only when a device-local Gemini key is absent.
 - [x] Allow students to clear a saved device Gemini key and explicitly return to the configured server fallback while keeping their model preference.
 - [x] Document that the user must set the optional GEMINI_API_KEY value directly in Vercel environment settings after deployment.
 - [x] Validate local-key priority routing, no-key fallback configuration response, long-response scrolling, responsive rendering, and production deployment.
-- [ ] Verify a successful live server-key fallback answer after GEMINI_API_KEY is configured in Vercel.
+- [x] Verify a successful live server-key fallback answer after GEMINI_API_KEY is configured in Vercel.
+- [x] Compact the saved student profile on `/app` so the dashboard prioritizes the next lecture and timetable without a large profile card.
+- [x] Add an accessible “View your full information” control that expands and collapses the complete saved profile details.
+- [x] Verify the compact and expanded profile states on mobile and desktop, then deploy the dashboard refinement.
