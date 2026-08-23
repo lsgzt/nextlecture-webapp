@@ -941,7 +941,6 @@ async function getPreviousPapers(sessionId) {
     maxContentLength: 2 * 1024 * 1024
   });
   const papers = parseGoogleDrivePapers(response.data);
-  if (!papers.length) throw new Error("The selected archive did not contain readable PDF entries.");
   const fetchedAt = Date.now();
   cache2.set(session.id, { fetchedAt, papers });
   return { session, papers, fetchedAt, freshness: "fresh" };

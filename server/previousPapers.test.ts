@@ -6,4 +6,8 @@ describe("Google Drive previous paper parser", () => {
     const papers = parseGoogleDrivePapers('<tr data-id="1a8ltKVpOKeETzR-MbosajRIckNuu-nBP"><td>PDF BSC-101 (15925).pdf Partagé Download</td></tr><tr data-id="1a8ltKVpOKeETzR-MbosajRIckNuu-nBP"><td>BSC-101 (15925).pdf</td></tr><tr data-id="folder-entry"><td>Notes</td></tr>');
     expect(papers).toEqual([{ id: "1a8ltKVpOKeETzR-MbosajRIckNuu-nBP", name: "BSC-101 (15925).pdf", viewUrl: "https://drive.google.com/file/d/1a8ltKVpOKeETzR-MbosajRIckNuu-nBP/view", downloadUrl: "https://drive.usercontent.google.com/download?id=1a8ltKVpOKeETzR-MbosajRIckNuu-nBP&export=download&confirm=t" }]);
   });
+
+  it("returns an empty catalog for a valid shared folder with no PDF rows", () => {
+    expect(parseGoogleDrivePapers('<tbody><tr data-id="folder-entry"><td>Folder only</td></tr></tbody>')).toEqual([]);
+  });
 });
