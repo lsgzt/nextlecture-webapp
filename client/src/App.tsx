@@ -8,9 +8,10 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import SyllabusPage from "./pages/SyllabusPage";
 import TimetableApp from "./pages/TimetableApp";
+import PreviousPapersPage from "./pages/PreviousPapersPage";
 
 function Router() {
-  return <Switch><Route path="/" component={Home} /><Route path="/app" component={TimetableApp} /><Route path="/syllabus" component={SyllabusPage} /><Route path="/404" component={NotFound} /><Route component={NotFound} /></Switch>;
+  return <Switch><Route path="/" component={Home} /><Route path="/app" component={TimetableApp} /><Route path="/syllabus" component={SyllabusPage} /><Route path="/papers" component={PreviousPapersPage} /><Route path="/404" component={NotFound} /><Route component={NotFound} /></Switch>;
 }
 
 export default function App() {

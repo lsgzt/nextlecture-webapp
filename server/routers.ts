@@ -7,6 +7,7 @@ import { publicProcedure, router } from "./_core/trpc";
 import { findGroupTimetable, getOfficialTimetable } from "./timetable";
 import { getTemporarySectionStudent, prepareTemporarySectionBranch, searchTemporarySectionStudents } from "./temporarySections";
 import { getOfficialSyllabusDocument } from "./syllabus";
+import { getPreviousPapers, getPreviousPaperSessions } from "./previousPapers";
 
 async function loadGroup(group: string, forceRefresh = false) {
   try {
@@ -119,6 +120,17 @@ export const appRouter = router({
         return await getOfficialSyllabusDocument();
       } catch (error) {
         throw new TRPCError({ code: "BAD_GATEWAY", message: "We couldn't load the official syllabus PDF. Please try again shortly.", cause: error });
+      }
+    }),
+  }),
+  previousPapers: router({
+    sessions: publicProcedure.query(() => getPreviousPaperSessions()),
+    papers: publicProcedure.input(z.object({ sessionId: z.string().trim().regex(/^[A-Za-z0-9_-]{20,100}$/) })).query(async ({ input }) => {
+      try {
+        return await getPreviousPapers(input.sessionId);
+      } catch (error) {
+        console.warn("[Previous papers] Unable to load Drive session", input.sessionId, error);
+        throw new TRPCError({ code: "BAD_GATEWAY", message: "We couldn't load that paper archive right now. Please try the original Drive folder.", cause: error });
       }
     }),
   }),

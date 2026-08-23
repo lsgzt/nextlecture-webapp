@@ -17,6 +17,9 @@ export const TEMPORARY_SECTION_SOURCE_PAGE_URL = "https://appsc.gndec.ac.in/time
 /** Official first-year syllabus PDF used only as Gemini document grounding for the Syllabus AI feature. */
 export const SYLLABUS_SOURCE_URL = "https://appsc.gndec.ac.in/sites/default/files/2026-03/ss%20and%20Syllabus%20sem1%2C2%20Dec%202025%20unsigned.pdf";
 
+/** Public Google Drive archive containing GNDEC previous-year examination papers. */
+export const PREVIOUS_YEAR_PAPERS_SOURCE_URL = "https://drive.google.com/drive/folders/11ywkOKyeixCPihsCzqZDyzy2msLXxx6w";
+
 /** Public API base path, retained as a clear configuration point for future API hosting changes. */
 export const BACKEND_API_URL = "/api/trpc";
 

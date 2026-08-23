@@ -1,5 +1,5 @@
 import { ANDROID_APP_URL, BRAND_LOGO_URL } from "@shared/config";
-import { ArrowRight, BellRing, BookOpenCheck, CalendarDays, ChevronDown, CircleCheck, ExternalLink, MapPin, Moon, Sparkles, Sun, UsersRound } from "lucide-react";
+import { ArrowRight, BellRing, BookOpenCheck, CalendarDays, ChevronDown, CircleCheck, ExternalLink, FileText, MapPin, Moon, Sparkles, Sun, UsersRound } from "lucide-react";
 import { Link } from "wouter";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
@@ -21,6 +21,7 @@ export default function Home() {
         </Link>
         <nav aria-label="Primary" className="flex items-center gap-2 sm:gap-3">
           <a className="hidden text-sm font-medium text-muted-foreground transition hover:text-foreground lg:inline-flex" href="#story">Why it exists</a>
+          <Link href="/papers" className="hidden text-sm font-semibold text-muted-foreground transition hover:text-teal-700 sm:inline-flex dark:hover:text-teal-300">Previous papers</Link>
           <Link href="/syllabus" className="hidden text-sm font-semibold text-teal-700 transition hover:text-teal-950 sm:inline-flex dark:text-teal-300 dark:hover:text-white">Syllabus AI</Link>
           <ThemeToggle />
           <Link href="/app" className="rounded-full bg-teal-700 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-teal-800/20 transition hover:bg-teal-800 active:scale-[0.97] sm:px-5">
@@ -48,6 +49,7 @@ export default function Home() {
                   Android App <ExternalLink className="h-4 w-4" aria-hidden="true" />
                 </a>
                 <Link href="/syllabus" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-5 text-base font-semibold text-teal-800 shadow-sm transition hover:-translate-y-0.5 hover:border-teal-400 hover:bg-teal-100 active:scale-[0.97] dark:border-teal-900 dark:bg-teal-950/35 dark:text-teal-200">Ask Syllabus AI <Sparkles className="h-4 w-4" aria-hidden="true" /></Link>
+                <Link href="/papers" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-border bg-card px-5 text-base font-semibold text-foreground shadow-sm transition hover:-translate-y-0.5 hover:border-teal-700/30 hover:text-teal-700 active:scale-[0.97] dark:hover:text-teal-300">Previous papers <FileText className="h-4 w-4" aria-hidden="true" /></Link>
               </div>
               <p className="mt-4 text-sm text-muted-foreground">Fast timetable access for every phone. For timely reminders, use the Android app.</p>
             </div>
@@ -134,7 +136,7 @@ export default function Home() {
         </section>
       </main>
 
-      <footer className="container py-12"><div className="grid gap-8 sm:grid-cols-[1fr_auto] sm:items-end"><div><div className="flex items-center gap-2 font-display text-lg font-semibold tracking-[-0.04em]"><span className="grid h-7 w-7 place-items-center rounded-lg bg-teal-700 text-[0.62rem] font-bold text-white">NL</span>NextLecture</div><p className="mt-4 max-w-sm text-sm leading-6 text-muted-foreground">Made for GNDEC students. Built because finding your next lecture shouldn’t be this complicated.</p></div><div className="flex gap-5 text-sm font-medium text-muted-foreground"><Link href="/app" className="transition hover:text-foreground">Web App</Link><Link href="/syllabus" className="transition hover:text-foreground">Syllabus AI</Link><a href={ANDROID_APP_URL} target="_blank" rel="noreferrer" className="transition hover:text-foreground">Android App</a><a href="https://appsc.gndec.ac.in/" target="_blank" rel="noreferrer" className="transition hover:text-foreground">GNDEC</a></div></div><p className="mt-10 text-xs text-muted-foreground">© 2026 NextLecture</p></footer>
+      <footer className="container py-12"><div className="grid gap-8 sm:grid-cols-[1fr_auto] sm:items-end"><div><div className="flex items-center gap-2 font-display text-lg font-semibold tracking-[-0.04em]"><span className="grid h-7 w-7 place-items-center rounded-lg bg-teal-700 text-[0.62rem] font-bold text-white">NL</span>NextLecture</div><p className="mt-4 max-w-sm text-sm leading-6 text-muted-foreground">Made for GNDEC students. Built because finding your next lecture shouldn’t be this complicated.</p></div><div className="flex flex-wrap gap-5 text-sm font-medium text-muted-foreground"><Link href="/app" className="transition hover:text-foreground">Web App</Link><Link href="/papers" className="transition hover:text-foreground">Previous papers</Link><Link href="/syllabus" className="transition hover:text-foreground">Syllabus AI</Link><a href={ANDROID_APP_URL} target="_blank" rel="noreferrer" className="transition hover:text-foreground">Android App</a><a href="https://appsc.gndec.ac.in/" target="_blank" rel="noreferrer" className="transition hover:text-foreground">GNDEC</a></div></div><p className="mt-10 text-xs text-muted-foreground">© 2026 NextLecture</p></footer>
     </div>
   );
 }

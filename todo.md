@@ -54,3 +54,8 @@
 - [x] Compact the saved student profile on `/app` so the dashboard prioritizes the next lecture and timetable without a large profile card.
 - [x] Add an accessible “View your full information” control that expands and collapses the complete saved profile details.
 - [x] Verify the compact and expanded profile states on mobile and desktop, then deploy the dashboard refinement.
+- [x] Inspect the user-provided Google Drive archive and extract the available previous-year paper PDFs, subjects, years, and direct file links.
+- [x] Add a discoverable Previous Year Papers entry point and a dedicated mobile-first papers page with clear headings, filters, and direct PDF links.
+- [ ] Add test coverage for the papers catalog data, verify the full experience on mobile and desktop, and deploy the feature.
+- [x] Validate direct-PDF discovery against representative regular and makeup Drive sessions across multiple archive years, then document the coverage.
+- [ ] Confirm production direct-link loading for representative regular and makeup sessions before final release.

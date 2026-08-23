@@ -438,19 +438,19 @@ async function readPersistentCache() {
     return null;
   }
 }
-async function persistCache(cache2) {
+async function persistCache(cache3) {
   const db = await getDb();
   if (!db) return;
   try {
     await db.insert(timetableCache).values({
       id: CACHE_KEY,
       sourceUrl: TIMETABLE_SOURCE_URL,
-      payload: JSON.stringify(cache2),
-      fetchedAt: new Date(cache2.fetchedAt)
+      payload: JSON.stringify(cache3),
+      fetchedAt: new Date(cache3.fetchedAt)
     }).onDuplicateKeyUpdate({
       set: {
-        payload: JSON.stringify(cache2),
-        fetchedAt: new Date(cache2.fetchedAt)
+        payload: JSON.stringify(cache3),
+        fetchedAt: new Date(cache3.fetchedAt)
       }
     });
   } catch (error) {
@@ -476,10 +476,10 @@ async function fetchAndParseOfficialTimetable() {
 }
 async function refreshCache() {
   if (!inFlightRefresh) {
-    inFlightRefresh = fetchAndParseOfficialTimetable().then(async (cache2) => {
-      inMemoryCache = cache2;
-      await persistCache(cache2);
-      return cache2;
+    inFlightRefresh = fetchAndParseOfficialTimetable().then(async (cache3) => {
+      inMemoryCache = cache3;
+      await persistCache(cache3);
+      return cache3;
     }).finally(() => {
       inFlightRefresh = null;
     });
@@ -498,8 +498,8 @@ async function getOfficialTimetable(forceRefresh = false) {
     return { cache: previousCache, freshness: "fresh", updateError: null };
   }
   try {
-    const cache2 = await refreshCache();
-    return { cache: cache2, freshness: "fresh", updateError: null };
+    const cache3 = await refreshCache();
+    return { cache: cache3, freshness: "fresh", updateError: null };
   } catch (error) {
     const message = error instanceof Error ? error.message : "The timetable update failed.";
     if (previousCache) {
@@ -547,9 +547,9 @@ function isBranch(value) {
 }
 function isValidEnvelope2(value) {
   if (!value || typeof value !== "object") return false;
-  const cache2 = value;
+  const cache3 = value;
   return Boolean(
-    cache2.data && isBranch(cache2.data.branch ?? "") && Array.isArray(cache2.data.students) && typeof cache2.fetchedAt === "number" && typeof cache2.sourceUrl === "string"
+    cache3.data && isBranch(cache3.data.branch ?? "") && Array.isArray(cache3.data.students) && typeof cache3.fetchedAt === "number" && typeof cache3.sourceUrl === "string"
   );
 }
 function parseTemporarySectionText(text2, expectedBranch, sourceUrl) {
@@ -709,17 +709,17 @@ async function readPersistentCache2(branch) {
     return null;
   }
 }
-async function persistCache2(cache2) {
+async function persistCache2(cache3) {
   const db = await getDb();
   if (!db) return;
   try {
     await db.insert(timetableCache).values({
-      id: cacheKey(cache2.data.branch),
-      sourceUrl: cache2.sourceUrl,
-      payload: JSON.stringify(cache2),
-      fetchedAt: new Date(cache2.fetchedAt)
+      id: cacheKey(cache3.data.branch),
+      sourceUrl: cache3.sourceUrl,
+      payload: JSON.stringify(cache3),
+      fetchedAt: new Date(cache3.fetchedAt)
     }).onDuplicateKeyUpdate({
-      set: { sourceUrl: cache2.sourceUrl, payload: JSON.stringify(cache2), fetchedAt: new Date(cache2.fetchedAt) }
+      set: { sourceUrl: cache3.sourceUrl, payload: JSON.stringify(cache3), fetchedAt: new Date(cache3.fetchedAt) }
     });
   } catch (error) {
     console.warn("[Temporary sections] Persistent cache could not be saved:", error);
@@ -738,14 +738,14 @@ async function refreshCache2(branch) {
   const request = (async () => {
     const sourceUrl = await discoverBranchDocument(branch);
     const students = parseTemporarySectionText(await extractOfficialPdfText(sourceUrl), branch, sourceUrl);
-    const cache2 = {
+    const cache3 = {
       data: { branch, students },
       fetchedAt: Date.now(),
       sourceUrl
     };
-    inMemoryCache2.set(branch, cache2);
-    await persistCache2(cache2);
-    return cache2;
+    inMemoryCache2.set(branch, cache3);
+    await persistCache2(cache3);
+    return cache3;
   })().finally(() => inFlightRefresh2.delete(branch));
   inFlightRefresh2.set(branch, request);
   return request;
@@ -864,6 +864,89 @@ async function getOfficialSyllabusDocument(force = false) {
   };
 }
 
+// shared/previous-papers.ts
+var previousPaperSessionRows = [
+  ["1py8IGO_sNeYgajnJk6vy0ZTCcV-j3Q6Q", "May 2013", 2013, "May", false],
+  ["13MCtBVU6MWiCcf15gmdYZtMo6YIlXv4m", "November 2013", 2013, "November", false],
+  ["1IZHoRc4wr1q3JKxP-lYH05CQyC9CzmYm", "May 2014", 2014, "May", false],
+  ["1HCgF1W9oBEgFnbYkAOBMXnC5DCIawtDv", "November 2014", 2014, "November", false],
+  ["1gKRXxg2MdqjEf0nwLxxPcQ8Jv2_Rty_j", "May 2015", 2015, "May", false],
+  ["1e-4vxLOsF5YtfH6AK0ArzVtYXWvJ4QTU", "November 2015", 2015, "November", false],
+  ["13Z6JJjDzwB1IkUnrTX7IkcNbqusz8Vjl", "May 2016", 2016, "May", false],
+  ["18dw5bm0NMDo3NS_E9kJLC3aNGspbXm-z", "November 2016", 2016, "November", false],
+  ["1r3NlwlvSD5j7XRfLeNUw3Bk0GmKPU7nq", "May 2017", 2017, "May", false],
+  ["1ht6i3Xay8njX3zidqGWnkLrnhKWv5GyB", "November 2017", 2017, "November", false],
+  ["1U8DE4mzC8GDPailf706H6yI6Sotayxvx", "May 2018", 2018, "May", false],
+  ["1DDiS4zuZWEWciSGDjzn40t6LXKweQA8D", "November 2018", 2018, "November", false],
+  ["1jsWeKxF6-5L-88snuhXdK3YqH7_5utZB", "May 2019", 2019, "May", false],
+  ["1nHYLcQcKFTAbl73ByqKc7lL6tIMMcaz0", "November 2019", 2019, "November", false],
+  ["1tSajo-ep5z4dFDmbdWU9sYDNPddmnz45", "November 2020", 2020, "November", false],
+  ["1Sd_BehGiibgsQrpAoki4O0WTH39fnjwb", "May 2021", 2021, "May", false],
+  ["1KTsdbyhOP79sFdLW-72630PyoQ9XU3UO", "November 2021", 2021, "November", false],
+  ["1RrNrAQjHrDBBPngI-6vwdhbCkpWK4npf", "May 2022", 2022, "May", false],
+  ["18he5n2Lk-rRGm3anCH-PYXpXk4yjBsDp", "Makeup \xB7 May 2022", 2022, "May", true],
+  ["1fiwQAhuVSTiCcrywbNZqZD63S4OgrcXT", "November 2022", 2022, "November", false],
+  ["1jXHxAcJq8qNtjuW8YXY-cNd1OSxvBxDy", "Makeup \xB7 November 2022", 2022, "November", true],
+  ["12zlzuN-8PnJqF0W9ujUge-5Rg9_hwAFa", "May 2023", 2023, "May", false],
+  ["1oOcj9DoufGnq2dG2Vfl72eC456xHZZt1", "Makeup \xB7 May 2023", 2023, "May", true],
+  ["1HF_ThB2z1L_IcaePC0BRZ_qw4DwKBMYC", "November 2023", 2023, "November", false],
+  ["1IRfXz75zO2IgLMVeowdFn11zczXnBznU", "Makeup \xB7 November 2023", 2023, "November", true],
+  ["1-ejwgx8No0umWLv9KH5vlHfYTfwA9r-4", "May 2024", 2024, "May", false],
+  ["1W-xcHyOyTRHWYulgkC-XqR5SL3hSBHIj", "Makeup \xB7 May 2024", 2024, "May", true],
+  ["1G0GbKPN0oWlgXT4Lbukt-p58Zwny_kan", "November 2024", 2024, "November", false],
+  ["1LBjMTooTYVCBX78idPgrHfIsjqpmLWwC", "Makeup \xB7 November 2024", 2024, "November", true],
+  ["1xUqKfe8uVeYh-yxzOAIJReelVVGGkSAF", "May 2025", 2025, "May", false],
+  ["1p9p79CFGPnVyT03vI1VfeX3SFfywjo1O", "Makeup \xB7 May 2025", 2025, "May", true],
+  ["1BndBZ3VJgEIBRldbdh-COmh4Tvu0000L", "November 2025", 2025, "November", false],
+  ["1sTQuhpZjkHU4wHuTvbkrGsdX80v9OC0Y", "Makeup \xB7 November 2025", 2025, "November", true]
+];
+var PREVIOUS_PAPER_SESSIONS = previousPaperSessionRows.map(([id, label, year, term, makeup]) => ({ id, label, year, term, makeup }));
+function toGoogleDrivePaperLinks(id) {
+  return { viewUrl: `https://drive.google.com/file/d/${id}/view`, downloadUrl: `https://drive.usercontent.google.com/download?id=${id}&export=download&confirm=t` };
+}
+
+// server/previousPapers.ts
+import axios3 from "axios";
+var CACHE_TTL_MS = 6 * 60 * 60 * 1e3;
+var PAPER_FILE_ID = /^[A-Za-z0-9_-]{20,100}$/;
+var cache2 = /* @__PURE__ */ new Map();
+function decodeHtml(value) {
+  return value.replace(/<[^>]+>/g, " ").replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&#39;/g, "'").replace(/&quot;/gi, '"').replace(/\s+/g, " ").trim();
+}
+function parseGoogleDrivePapers(html) {
+  const papers = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const match of Array.from(html.matchAll(/\bdata-id="([^"]+)"[^>]*>([\s\S]*?)<\/tr>/gi))) {
+    const id = match[1];
+    const text2 = decodeHtml(match[2]);
+    const name = (text2.match(/(?:^|\s)(?:PDF\s+)?(.+?\.pdf)(?=\s+(?:Shared|Partagé|Download|Télécharger)(?:\s|$)|$)/i)?.[1] ?? "").trim();
+    if (!PAPER_FILE_ID.test(id) || !/\.pdf$/i.test(name) || seen.has(id)) continue;
+    seen.add(id);
+    papers.push({ id, name, ...toGoogleDrivePaperLinks(id) });
+  }
+  return papers.sort((left, right) => left.name.localeCompare(right.name, void 0, { numeric: true }));
+}
+function getPreviousPaperSessions() {
+  return PREVIOUS_PAPER_SESSIONS;
+}
+async function getPreviousPapers(sessionId) {
+  const session = PREVIOUS_PAPER_SESSIONS.find((item) => item.id === sessionId);
+  if (!session) throw new Error("That paper archive session is not available.");
+  const cached = cache2.get(session.id);
+  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) return { session, papers: cached.papers, fetchedAt: cached.fetchedAt, freshness: "fresh" };
+  const response = await axios3.get(`https://drive.google.com/drive/folders/${session.id}`, {
+    headers: { Accept: "text/html", "User-Agent": "NextLecture/1.0 (previous papers catalog)" },
+    responseType: "text",
+    timeout: 25e3,
+    maxContentLength: 2 * 1024 * 1024
+  });
+  const papers = parseGoogleDrivePapers(response.data);
+  if (!papers.length) throw new Error("The selected archive did not contain readable PDF entries.");
+  const fetchedAt = Date.now();
+  cache2.set(session.id, { fetchedAt, papers });
+  return { session, papers, fetchedAt, freshness: "fresh" };
+}
+
 // server/routers.ts
 async function loadGroup(group, forceRefresh = false) {
   try {
@@ -967,6 +1050,17 @@ var appRouter = router({
         throw new TRPCError3({ code: "BAD_GATEWAY", message: "We couldn't load the official syllabus PDF. Please try again shortly.", cause: error });
       }
     })
+  }),
+  previousPapers: router({
+    sessions: publicProcedure.query(() => getPreviousPaperSessions()),
+    papers: publicProcedure.input(z2.object({ sessionId: z2.string().trim().regex(/^[A-Za-z0-9_-]{20,100}$/) })).query(async ({ input }) => {
+      try {
+        return await getPreviousPapers(input.sessionId);
+      } catch (error) {
+        console.warn("[Previous papers] Unable to load Drive session", input.sessionId, error);
+        throw new TRPCError3({ code: "BAD_GATEWAY", message: "We couldn't load that paper archive right now. Please try the original Drive folder.", cause: error });
+      }
+    })
   })
 });
 
@@ -981,7 +1075,7 @@ var HttpError = class extends Error {
 var ForbiddenError = (msg) => new HttpError(403, msg);
 
 // server/_core/sdk.ts
-import axios3 from "axios";
+import axios4 from "axios";
 import { parse as parseCookieHeader } from "cookie";
 import { SignJWT, jwtVerify } from "jose";
 var isNonEmptyString2 = (value) => typeof value === "string" && value.length > 0;
@@ -1024,7 +1118,7 @@ var OAuthService = class {
     return data;
   }
 };
-var createOAuthHttpClient = () => axios3.create({
+var createOAuthHttpClient = () => axios4.create({
   baseURL: ENV.oAuthServerUrl,
   timeout: AXIOS_TIMEOUT_MS
 });
