@@ -13,3 +13,7 @@ The source can be localized by Google Drive (for example, the sharing label appe
 Representative validation: live server-side discovery returned 50 direct PDFs for each checked session: regular May 2025 (`BBA-631.pdf` first), makeup May 2024 (`BBA201-18.pdf` first), regular November 2023 (`BBA101-18.pdf` first), and makeup November 2022 (`BBA301-18.pdf` first). This validates regular and makeup catalog parsing across multiple archive years.
 
 Production validation: the deployed `/papers` page successfully loaded 50 direct PDFs for regular May 2025, with in-app open and download controls pointing to the original Google Drive files.
+
+The deployed Makeup May 2025 folder is currently public but contains no readable PDF rows. The live app correctly presents this as an empty-session message rather than a failure, while retaining the original folder link for later updates.
+
+Production makeup-link validation: Makeup May 2024 successfully loaded 50 direct PDFs in the deployed app, including `BBA201-18.pdf`, `BSC-101.pdf`, and `BSIT-101.pdf`, each with original-file open and download controls.

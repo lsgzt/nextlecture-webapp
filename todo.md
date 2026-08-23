@@ -56,6 +56,7 @@
 - [x] Verify the compact and expanded profile states on mobile and desktop, then deploy the dashboard refinement.
 - [x] Inspect the user-provided Google Drive archive and extract the available previous-year paper PDFs, subjects, years, and direct file links.
 - [x] Add a discoverable Previous Year Papers entry point and a dedicated mobile-first papers page with clear headings, filters, and direct PDF links.
-- [ ] Add test coverage for the papers catalog data, verify the full experience on mobile and desktop, and deploy the feature.
+- [x] Add test coverage for the papers catalog data, verify the full experience on mobile and desktop, and deploy the feature.
 - [x] Validate direct-PDF discovery against representative regular and makeup Drive sessions across multiple archive years, then document the coverage.
-- [ ] Confirm production direct-link loading for representative regular and makeup sessions before final release.
+- [x] Confirm the valid empty-session state for Makeup May 2025 is clear and non-erroring in production.
+- [x] Confirm production direct-link loading for a makeup session with published PDFs before final release.
