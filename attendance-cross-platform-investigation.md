@@ -31,3 +31,7 @@ With a test-only saved profile, the local `/app` dashboard showed the profile ca
 ## Production API compatibility smoke test
 
 A token-safe synthetic test created an Android-style attendance session with a generated profile fingerprint, saved a present record, created a separate web-style installation session with that exact fingerprint, and confirmed that the second session recovered the same server owner and read the Android-created record. It then deleted the generated record and verified it was absent from a final history read. No real student profile, bearer token, or persistent test data was used.
+
+## Automatic recovery verification
+
+The web profile recovery route uses the exact CRN, branch, name, and subsection from a saved official web profile to find its matching Android registration number in the published permanent student directory. In a local end-to-end UI check, an existing official profile was automatically matched, its local attendance installation and session were rotated, and the page reported that it was loading shared server history. The deployed Vercel tRPC route for the same synthetic lookup returned HTTP 200. Together with the production API owner-recovery smoke test, this verifies the web path now creates the same attendance owner identity as Android without re-marking records.
