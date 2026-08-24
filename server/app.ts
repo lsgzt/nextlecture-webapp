@@ -6,6 +6,7 @@ import { registerOAuthRoutes } from "./_core/oauth";
 import { registerStorageProxy } from "./_core/storageProxy";
 import { getOfficialSyllabusPdfBuffer } from "./syllabus";
 import { createServerFallbackGeminiResponse, getConfiguredGeminiApiKey } from "./syllabusGemini";
+import { createAttendanceProxyHandler } from "./attendanceProxy";
 
 /**
  * Creates the shared HTTP application for local hosting and serverless adapters.
@@ -18,6 +19,7 @@ export function createApp() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  app.use("/api/attendance", createAttendanceProxyHandler());
   app.get("/api/syllabus.pdf", async (_req, res) => {
     try {
       const syllabus = await getOfficialSyllabusPdfBuffer();

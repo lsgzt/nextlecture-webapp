@@ -1555,6 +1555,68 @@ Question: ${question}` }] }
   });
 }
 
+// server/attendanceProxy.ts
+var ALLOWED_ROUTES = /* @__PURE__ */ new Set(["POST /session", "GET /", "POST /records", "DELETE /records"]);
+function getAttendanceApiBase() {
+  return process.env.ATTENDANCE_API_BASE?.trim().replace(/\/$/, "") || null;
+}
+function isAllowedAttendanceRoute(method, relativePath) {
+  return ALLOWED_ROUTES.has(`${method.toUpperCase()} ${relativePath}`);
+}
+function hasOnlyQueryParameters(url, allowed) {
+  return Array.from(url.searchParams.keys()).every((key) => allowed.includes(key));
+}
+function hasValidAttendanceQuery(method, relativePath, url) {
+  if (method === "GET" && relativePath === "/") {
+    const from = url.searchParams.get("from");
+    const to = url.searchParams.get("to");
+    const target = Number(url.searchParams.get("target"));
+    return hasOnlyQueryParameters(url, ["from", "to", "target"]) && Boolean(from?.match(/^\d{4}-\d{2}-\d{2}$/)) && Boolean(to?.match(/^\d{4}-\d{2}-\d{2}$/)) && Number.isInteger(target) && target >= 50 && target <= 100;
+  }
+  if (method === "DELETE" && relativePath === "/records") {
+    const date = url.searchParams.get("date");
+    const lectureKey = url.searchParams.get("lectureKey");
+    return hasOnlyQueryParameters(url, ["date", "lectureKey"]) && Boolean(date?.match(/^\d{4}-\d{2}-\d{2}$/)) && Boolean(lectureKey?.match(/^[a-f0-9]{64}$/));
+  }
+  return url.search === "";
+}
+function createAttendanceProxyHandler(options = {}) {
+  const fetcher = options.fetcher ?? fetch;
+  return async (req, res) => {
+    const apiBase = options.apiBase ?? getAttendanceApiBase();
+    if (!apiBase) {
+      res.status(503).json({ message: "Attendance sync is not configured on this deployment yet. Please try again after the administrator finishes setup." });
+      return;
+    }
+    const url = new URL(req.originalUrl, "http://nextlecture.local");
+    const relativePath = url.pathname.replace(/^\/api\/attendance/, "") || "/";
+    if (!isAllowedAttendanceRoute(req.method, relativePath)) {
+      res.status(404).json({ message: "Attendance route not found." });
+      return;
+    }
+    if (!hasValidAttendanceQuery(req.method, relativePath, url)) {
+      res.status(400).json({ message: "Attendance request parameters are invalid." });
+      return;
+    }
+    const headers = { Accept: "application/json" };
+    if (req.method === "POST") headers["Content-Type"] = "application/json";
+    const authorization = req.get("authorization");
+    if (authorization?.startsWith("Bearer ")) headers.Authorization = authorization;
+    try {
+      const upstream = await fetcher(`${apiBase}/api/attendance${relativePath}${url.search}`, {
+        method: req.method,
+        headers,
+        body: req.method === "POST" ? JSON.stringify(req.body ?? {}) : void 0
+      });
+      const contentType = upstream.headers.get("content-type") || "application/json; charset=utf-8";
+      const body = Buffer.from(await upstream.arrayBuffer());
+      res.status(upstream.status).setHeader("Content-Type", contentType).setHeader("Cache-Control", "no-store").send(body);
+    } catch {
+      res.status(503).json({ message: "Attendance could not be synced. Check your connection and try again." });
+    }
+  };
+}
+
 // server/app.ts
 function createApp() {
   const app2 = express();
@@ -1562,6 +1624,7 @@ function createApp() {
   app2.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app2);
   registerOAuthRoutes(app2);
+  app2.use("/api/attendance", createAttendanceProxyHandler());
   app2.get("/api/syllabus.pdf", async (_req, res) => {
     try {
       const syllabus = await getOfficialSyllabusPdfBuffer();
