@@ -88,7 +88,8 @@
 - [x] Move attendance controls and summaries out of the timetable dashboard so attendance is accessed through the existing View attendance action and the next lecture remains the primary dashboard focus.
 - [x] Update the web-only attendance identity, session, and history client to retrieve and write the same records as the Android app through the deployed API.
 - [x] Add cross-platform compatibility tests and regression-test timetable, attendance, papers, and Syllabus AI behavior.
-- [ ] Deploy the web-only dashboard and attendance synchronization repair to GitHub and Vercel, then verify the live API behavior.
+- [x] Deploy the web-only dashboard and attendance synchronization repair to GitHub and Vercel, then verify the live API behavior.
 - [x] Extend the web profile pipeline to automatically resolve and persist the Android-compatible registration number for official saved profiles, with a manual recovery fallback only when no verified match is available.
 - [x] Verify and document an end-to-end web profile flow that recovers an Android-style attendance owner and reads its existing server record without duplicate marking.
 - [ ] Verify the configured production web profile flow against the account owner’s own Android attendance record without viewing or exposing any other student’s data.
+- [x] Run and document a synthetic end-to-end smoke test through the live NextLecture attendance proxy, covering profile-compatible session recovery, record visibility, write, and cleanup without exposing a bearer token.
