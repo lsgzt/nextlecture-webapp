@@ -68,4 +68,5 @@
 - [x] Make profile saves and updates immediately persist and activate `profile.subsection` as the dashboard timetable group in the current session.
 - [x] Add explicit resolver lifecycle tests for fresh-cache responsiveness, failed-refresh last-known-good preservation, and source-change validator clearing.
 - [x] Run a focused Previous Year Papers regression check after the timetable resolver changes and document the outcome.
-- [ ] Verify the complete resolver in production, document the optional `Timetable_url` Vercel variable for the owner, and deploy the release.
+- [x] Verify the complete resolver in production, document the optional `Timetable_url` Vercel variable for the owner, and deploy the release.
+- [x] Confirm the production domain is serving the `b049138` timetable-resolver release and record direct evidence of its discovered official source URL.
