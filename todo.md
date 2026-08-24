@@ -79,3 +79,7 @@
 - [x] Handle empty successful DELETE responses and verify the proxy-mediated save-update-clear-read lifecycle.
 - [x] Add coverage for same-fingerprint session recovery across installations and fingerprint isolation, plus clear/delete client lifecycle behavior.
 - [x] Run and document an end-to-end smoke test through NextLecture’s same-origin attendance proxy for session creation, present write, absent update, clear, and post-clear read.
+- [x] Reproduce the reported production timetable outage and capture live dashboard, groups, resolver, and deployment evidence.
+- [x] Repair the production timetable retrieval or resolver failure while preserving official-first discovery and cache fallback behavior.
+- [x] Re-validate timetable group loading and dashboard data, plus attendance, Syllabus AI, and Previous Year Papers regressions.
+- [ ] Deploy the timetable recovery to GitHub and Vercel, then document the root cause and live verification.

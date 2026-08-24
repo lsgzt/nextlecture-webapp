@@ -3,6 +3,7 @@ import { load } from "cheerio";
 import { timetableCache } from "../drizzle/schema";
 import {
   TIMETABLE_CACHE_TTL_MS,
+  TIMETABLE_EMERGENCY_SNAPSHOT_URL,
   TIMETABLE_OFFICIAL_INDEX_URL,
   TIMETABLE_SOURCE_FALLBACK_API_URL,
   TIMETABLE_SOURCE_URL,
@@ -44,6 +45,7 @@ const CACHE_KEY = "official-gnedc-timetable";
 const REQUEST_TIMEOUT_MS = 12_000;
 const SOURCE_RESOLUTION_TIMEOUT_MS = 7_000;
 const OFFICIAL_TIMETABLE_HOST = "appsc.gndec.ac.in";
+const EMERGENCY_SNAPSHOT_NOTICE = "The official GNDEC timetable source is temporarily unavailable. Showing a verified emergency snapshot while it recovers.";
 
 let inMemoryCache: TimetableCacheEnvelope | null = null;
 let inFlightRefresh: Promise<TimetableCacheEnvelope> | null = null;
@@ -338,6 +340,29 @@ async function fetchAndParseOfficialTimetable(sourceUrl: string, previousCache: 
   } satisfies TimetableCacheEnvelope;
 }
 
+/**
+ * Parse the verified official R4 snapshot with the same strict parser used for
+ * live sources. This is selected only after live retrieval fails on a cold
+ * instance, then every later refresh resumes official-first discovery.
+ */
+export async function fetchEmergencyTimetableSnapshot(requiredGroup?: string, fetcher: FetchLike = fetch) {
+  const response = await fetcher(TIMETABLE_EMERGENCY_SNAPSHOT_URL, {
+    headers: { Accept: "text/html,application/xhtml+xml" },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new Error(`The verified emergency timetable snapshot responded with ${response.status}.`);
+  const html = await response.text();
+  if (!html.trim()) throw new Error("The verified emergency timetable snapshot was empty.");
+  const data = parseTimetableHtml(html);
+  assertTimetableIntegrity(data, requiredGroup);
+  return {
+    data,
+    fetchedAt: Date.now(),
+    sourceUrl: TIMETABLE_EMERGENCY_SNAPSHOT_URL,
+    validators: { etag: response.headers.get("etag"), lastModified: response.headers.get("last-modified") },
+  } satisfies TimetableCacheEnvelope;
+}
+
 async function refreshCache(previousCache: TimetableCacheEnvelope | null, forceDataRefresh: boolean, requiredGroup?: string) {
   if (!inFlightRefresh) {
     inFlightRefresh = (async () => {
@@ -345,7 +370,13 @@ async function refreshCache(previousCache: TimetableCacheEnvelope | null, forceD
       const sourceChanged = previousCache?.sourceUrl !== resolution.url;
       const cacheIsFresh = Boolean(previousCache && Date.now() - previousCache.fetchedAt < TIMETABLE_CACHE_TTL_MS);
       if (previousCache && !forceDataRefresh && !sourceChanged && cacheIsFresh) return previousCache;
-      const cache = await fetchAndParseOfficialTimetable(resolution.url, sourceChanged ? null : previousCache, requiredGroup);
+      let cache: TimetableCacheEnvelope;
+      try {
+        cache = await fetchAndParseOfficialTimetable(resolution.url, sourceChanged ? null : previousCache, requiredGroup);
+      } catch (sourceError) {
+        console.warn("[Timetable] Live source unavailable; attempting verified emergency snapshot:", asErrorMessage(sourceError));
+        cache = await fetchEmergencyTimetableSnapshot(requiredGroup);
+      }
       inMemoryCache = cache;
       await persistCache(cache);
       return cache;
@@ -369,11 +400,13 @@ export async function getOfficialTimetable(forceRefresh = false, requiredGroup?:
   const cacheIsFresh = Boolean(previousCache && Date.now() - previousCache.fetchedAt < TIMETABLE_CACHE_TTL_MS);
   if (!forceRefresh && previousCache && cacheIsFresh) {
     void refreshCache(previousCache, false, requiredGroup).catch(error => console.warn("[Timetable] Background source refresh failed:", error));
-    return { cache: previousCache, freshness: "fresh", updateError: null };
+    const emergency = previousCache.sourceUrl === TIMETABLE_EMERGENCY_SNAPSHOT_URL;
+    return { cache: previousCache, freshness: emergency ? "stale" : "fresh", updateError: emergency ? EMERGENCY_SNAPSHOT_NOTICE : null };
   }
   try {
     const cache = await refreshCache(previousCache, forceRefresh, requiredGroup);
-    return { cache, freshness: "fresh", updateError: null };
+    const emergency = cache.sourceUrl === TIMETABLE_EMERGENCY_SNAPSHOT_URL;
+    return { cache, freshness: emergency ? "stale" : "fresh", updateError: emergency ? EMERGENCY_SNAPSHOT_NOTICE : null };
   } catch (error) {
     const message = asErrorMessage(error);
     if (previousCache) return { cache: previousCache, freshness: "stale", updateError: message };

@@ -230,6 +230,7 @@ var timetableCache = mysqlTable("timetable_cache", {
 var TIMETABLE_OFFICIAL_INDEX_URL = "https://appsc.gndec.ac.in/time_tables";
 var TIMETABLE_SOURCE_URL = "https://appsc.gndec.ac.in/sites/default/files/2026-08/23_08_2026%20FINAL_FILE%20R4_subgroups_days_horizontal.html";
 var TIMETABLE_SOURCE_FALLBACK_API_URL = "https://gndec-pyq-rag-api.vercel.app/api/timetable-source";
+var TIMETABLE_EMERGENCY_SNAPSHOT_URL = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663345189289/WkXeXlTJxEDfZTUg.html";
 var TEMPORARY_SECTION_SOURCE_PAGE_URL = "https://appsc.gndec.ac.in/time_tables";
 var SYLLABUS_SOURCE_URL = "https://appsc.gndec.ac.in/sites/default/files/2026-03/ss%20and%20Syllabus%20sem1%2C2%20Dec%202025%20unsigned.pdf";
 var TIMETABLE_CACHE_TTL_MS = 30 * 60 * 1e3;
@@ -297,6 +298,7 @@ var CACHE_KEY = "official-gnedc-timetable";
 var REQUEST_TIMEOUT_MS = 12e3;
 var SOURCE_RESOLUTION_TIMEOUT_MS = 7e3;
 var OFFICIAL_TIMETABLE_HOST = "appsc.gndec.ac.in";
+var EMERGENCY_SNAPSHOT_NOTICE = "The official GNDEC timetable source is temporarily unavailable. Showing a verified emergency snapshot while it recovers.";
 var inMemoryCache = null;
 var inFlightRefresh = null;
 function normalizeText(value) {
@@ -539,6 +541,23 @@ async function fetchAndParseOfficialTimetable(sourceUrl, previousCache, required
     validators: { etag: response.headers.get("etag"), lastModified: response.headers.get("last-modified") }
   };
 }
+async function fetchEmergencyTimetableSnapshot(requiredGroup, fetcher = fetch) {
+  const response = await fetcher(TIMETABLE_EMERGENCY_SNAPSHOT_URL, {
+    headers: { Accept: "text/html,application/xhtml+xml" },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+  });
+  if (!response.ok) throw new Error(`The verified emergency timetable snapshot responded with ${response.status}.`);
+  const html = await response.text();
+  if (!html.trim()) throw new Error("The verified emergency timetable snapshot was empty.");
+  const data = parseTimetableHtml(html);
+  assertTimetableIntegrity(data, requiredGroup);
+  return {
+    data,
+    fetchedAt: Date.now(),
+    sourceUrl: TIMETABLE_EMERGENCY_SNAPSHOT_URL,
+    validators: { etag: response.headers.get("etag"), lastModified: response.headers.get("last-modified") }
+  };
+}
 async function refreshCache(previousCache, forceDataRefresh, requiredGroup) {
   if (!inFlightRefresh) {
     inFlightRefresh = (async () => {
@@ -546,7 +565,13 @@ async function refreshCache(previousCache, forceDataRefresh, requiredGroup) {
       const sourceChanged = previousCache?.sourceUrl !== resolution.url;
       const cacheIsFresh = Boolean(previousCache && Date.now() - previousCache.fetchedAt < TIMETABLE_CACHE_TTL_MS);
       if (previousCache && !forceDataRefresh && !sourceChanged && cacheIsFresh) return previousCache;
-      const cache3 = await fetchAndParseOfficialTimetable(resolution.url, sourceChanged ? null : previousCache, requiredGroup);
+      let cache3;
+      try {
+        cache3 = await fetchAndParseOfficialTimetable(resolution.url, sourceChanged ? null : previousCache, requiredGroup);
+      } catch (sourceError) {
+        console.warn("[Timetable] Live source unavailable; attempting verified emergency snapshot:", asErrorMessage(sourceError));
+        cache3 = await fetchEmergencyTimetableSnapshot(requiredGroup);
+      }
       inMemoryCache = cache3;
       await persistCache(cache3);
       return cache3;
@@ -566,11 +591,13 @@ async function getOfficialTimetable(forceRefresh = false, requiredGroup) {
   const cacheIsFresh = Boolean(previousCache && Date.now() - previousCache.fetchedAt < TIMETABLE_CACHE_TTL_MS);
   if (!forceRefresh && previousCache && cacheIsFresh) {
     void refreshCache(previousCache, false, requiredGroup).catch((error) => console.warn("[Timetable] Background source refresh failed:", error));
-    return { cache: previousCache, freshness: "fresh", updateError: null };
+    const emergency = previousCache.sourceUrl === TIMETABLE_EMERGENCY_SNAPSHOT_URL;
+    return { cache: previousCache, freshness: emergency ? "stale" : "fresh", updateError: emergency ? EMERGENCY_SNAPSHOT_NOTICE : null };
   }
   try {
     const cache3 = await refreshCache(previousCache, forceRefresh, requiredGroup);
-    return { cache: cache3, freshness: "fresh", updateError: null };
+    const emergency = cache3.sourceUrl === TIMETABLE_EMERGENCY_SNAPSHOT_URL;
+    return { cache: cache3, freshness: emergency ? "stale" : "fresh", updateError: emergency ? EMERGENCY_SNAPSHOT_NOTICE : null };
   } catch (error) {
     const message = asErrorMessage(error);
     if (previousCache) return { cache: previousCache, freshness: "stale", updateError: message };

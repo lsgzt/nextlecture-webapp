@@ -20,6 +20,13 @@ export const TIMETABLE_SOURCE_URL =
 /** Public, credential-free fallback that is consulted only when official discovery fails. */
 export const TIMETABLE_SOURCE_FALLBACK_API_URL = "https://gndec-pyq-rag-api.vercel.app/api/timetable-source";
 
+/**
+ * Verified R4 official timetable snapshot captured on 24 Aug 2026. It is a
+ * server-only last-resort recovery source for cold deployments during a GNDEC
+ * host outage; normal refreshes always return to official discovery first.
+ */
+export const TIMETABLE_EMERGENCY_SNAPSHOT_URL = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663345189289/WkXeXlTJxEDfZTUg.html";
+
 /** Official index of the temporary-section documents used for first-run student profiles. */
 export const TEMPORARY_SECTION_SOURCE_PAGE_URL = "https://appsc.gndec.ac.in/time_tables";
 

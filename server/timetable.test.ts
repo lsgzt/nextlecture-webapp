@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { afterEach, vi } from "vitest";
-import { buildTimetableRequestHeaders, discoverTimetableSourceFromIndexHtml, findGroupTimetable, getOfficialTimetable, parseTimetableHtml, resolveTimetableSource, setTimetableCacheForTests, validateOfficialTimetableUrl } from "./timetable";
+import { buildTimetableRequestHeaders, discoverTimetableSourceFromIndexHtml, fetchEmergencyTimetableSnapshot, findGroupTimetable, getOfficialTimetable, parseTimetableHtml, resolveTimetableSource, setTimetableCacheForTests, validateOfficialTimetableUrl } from "./timetable";
+import { TIMETABLE_EMERGENCY_SNAPSHOT_URL } from "../shared/config";
 
 const SAMPLE_TIMETABLE_HTML = `
   <ul><li>Year BTECH FIRST YEAR CHEMISTRY GROUP<ul><li>Group ITB:<a href="#table_53">ITB2</a></li></ul></li></ul>
@@ -44,6 +45,16 @@ describe("GNDEC timetable parser", () => {
     expect(() => parseTimetableHtml("<html><body>Maintenance</body></html>")).toThrow(
       "did not contain any valid group tables",
     );
+  });
+
+  it("parses the verified emergency snapshot with the normal integrity checks", async () => {
+    const fetcher = vi.fn(async () => new Response(SAMPLE_TIMETABLE_HTML, { status: 200, headers: { ETag: "snapshot-etag" } }));
+    await expect(fetchEmergencyTimetableSnapshot("ITB2", fetcher)).resolves.toMatchObject({
+      sourceUrl: TIMETABLE_EMERGENCY_SNAPSHOT_URL,
+      validators: { etag: "snapshot-etag" },
+      data: { groups: [{ code: "ITB2" }] },
+    });
+    expect(fetcher).toHaveBeenCalledWith(TIMETABLE_EMERGENCY_SNAPSHOT_URL, expect.any(Object));
   });
 });
 
