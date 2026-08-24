@@ -82,4 +82,5 @@
 - [x] Reproduce the reported production timetable outage and capture live dashboard, groups, resolver, and deployment evidence.
 - [x] Repair the production timetable retrieval or resolver failure while preserving official-first discovery and cache fallback behavior.
 - [x] Re-validate timetable group loading and dashboard data, plus attendance, Syllabus AI, and Previous Year Papers regressions.
-- [ ] Deploy the timetable recovery to GitHub and Vercel, then document the root cause and live verification.
+- [x] Deploy the timetable recovery to GitHub and Vercel, then document the root cause and live verification.
+- [x] Confirm and document that production is serving timetable recovery commit 59aeb74, including the emergency snapshot fallback design and post-deploy `/app` group-loading evidence.
