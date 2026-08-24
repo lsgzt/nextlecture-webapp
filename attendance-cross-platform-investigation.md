@@ -37,3 +37,7 @@ A token-safe synthetic test created an Android-style attendance session with a g
 The web profile recovery route uses the exact CRN, branch, name, and subsection from a saved official web profile to find its matching Android registration number in the published permanent student directory. In a local end-to-end UI check, an existing official profile was automatically matched, its local attendance installation and session were rotated, and the page reported that it was loading shared server history. The deployed Vercel tRPC route for the same synthetic lookup returned HTTP 200. Together with the production API owner-recovery smoke test, this verifies the web path now creates the same attendance owner identity as Android without re-marking records.
 
 The live `nextlecture.vercel.app` proxy was also verified with generated identities only. An Android-style installation created a present record through the deployed NextLecture proxy; a second web-style installation with the same profile fingerprint recovered that owner and read the record through the same proxy. The record was then updated, deleted, and confirmed absent from a final read. No bearer token, real attendance record, or personal student data was displayed.
+
+## Owner verification
+
+The account owner subsequently confirmed that the deployed web flow worked correctly with their own Android attendance records. No individual attendance details were accessed, displayed, or retained during that confirmation.

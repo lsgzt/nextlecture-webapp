@@ -91,5 +91,5 @@
 - [x] Deploy the web-only dashboard and attendance synchronization repair to GitHub and Vercel, then verify the live API behavior.
 - [x] Extend the web profile pipeline to automatically resolve and persist the Android-compatible registration number for official saved profiles, with a manual recovery fallback only when no verified match is available.
 - [x] Verify and document an end-to-end web profile flow that recovers an Android-style attendance owner and reads its existing server record without duplicate marking.
-- [ ] Verify the configured production web profile flow against the account owner’s own Android attendance record without viewing or exposing any other student’s data.
+- [x] Verify the configured production web profile flow against the account owner’s own Android attendance record without viewing or exposing any other student’s data.
 - [x] Run and document a synthetic end-to-end smoke test through the live NextLecture attendance proxy, covering profile-compatible session recovery, record visibility, write, and cleanup without exposing a bearer token.
