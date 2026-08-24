@@ -7,9 +7,18 @@ export const ANDROID_APP_URL = "https://github.com/lsgzt/nextlecture-android/rel
 /** Publicly served logo assets used by deployed headers and device icon metadata. */
 export const BRAND_LOGO_URL = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663345189289/xrndoJiVzCLAnaSr.png";
 
-/** The single official source used by the server-side timetable fetcher. */
+/** Permanent official GNDEC index, always attempted before any fallback source. */
+export const TIMETABLE_OFFICIAL_INDEX_URL = "https://appsc.gndec.ac.in/time_tables";
+
+/**
+ * Last known valid official timetable URL bundled only as a final resilient fallback.
+ * Normal operation discovers the current URL from TIMETABLE_OFFICIAL_INDEX_URL.
+ */
 export const TIMETABLE_SOURCE_URL =
-  "https://appsc.gndec.ac.in/sites/default/files/2026-08/09_08_2026%20FINAL_FILE_subgroups_days_horizontal.html";
+  "https://appsc.gndec.ac.in/sites/default/files/2026-08/23_08_2026%20FINAL_FILE%20R4_subgroups_days_horizontal.html";
+
+/** Public, credential-free fallback that is consulted only when official discovery fails. */
+export const TIMETABLE_SOURCE_FALLBACK_API_URL = "https://gndec-pyq-rag-api.vercel.app/api/timetable-source";
 
 /** Official index of the temporary-section documents used for first-run student profiles. */
 export const TEMPORARY_SECTION_SOURCE_PAGE_URL = "https://appsc.gndec.ac.in/time_tables";

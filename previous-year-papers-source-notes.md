@@ -17,3 +17,5 @@ Production validation: the deployed `/papers` page successfully loaded 50 direct
 The deployed Makeup May 2025 folder is currently public but contains no readable PDF rows. The live app correctly presents this as an empty-session message rather than a failure, while retaining the original folder link for later updates.
 
 Production makeup-link validation: Makeup May 2024 successfully loaded 50 direct PDFs in the deployed app, including `BBA201-18.pdf`, `BSC-101.pdf`, and `BSIT-101.pdf`, each with original-file open and download controls.
+
+Resolver regression check: after the timetable source-resolver changes, the deployed Previous Year Papers page still loaded the May 2025 session and exposed 50 direct PDF open/download links. This confirms the timetable resolver does not modify the independent paper catalog route.

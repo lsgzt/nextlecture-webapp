@@ -6,6 +6,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { StudentProfileSetup } from "@/components/StudentProfileSetup";
 import { trpc } from "@/lib/trpc";
 import { getStudentProfileDetailFields, getStudentProfileSubtitle } from "@/lib/student-profile-display";
+import { getPreferredTimetableGroup } from "@/lib/timetable-selection";
 import { deriveGroupParts, formatRange, getDayLabel, getNextLecture, getTodayLectures, humanizeDuration, lectureStatus, timeToMinutes } from "@/lib/timetable-ui";
 import { readStoredStudentProfile, saveStudentProfile as persistStudentProfile } from "@/lib/student-profile-storage";
 import { BRAND_LOGO_URL } from "@shared/config";
@@ -18,8 +19,9 @@ type LocalTimetable = TimetableResponse;
 type TimelineItem = { kind: "lecture"; lecture: Lecture } | { kind: "free"; startTime: string };
 
 function getInitialSelectedGroup() {
+  const profileSubsection = readStoredStudentProfile(localStorage)?.subsection ?? null;
   const sharedGroup = new URLSearchParams(window.location.search).get("group")?.trim().toUpperCase();
-  return sharedGroup || localStorage.getItem(SELECTED_GROUP_KEY);
+  return getPreferredTimetableGroup(profileSubsection, sharedGroup ?? null, localStorage.getItem(SELECTED_GROUP_KEY));
 }
 
 function safelyReadLocalTimetable() {
@@ -152,6 +154,12 @@ export default function TimetableApp() {
 
   function saveStudentProfile(profile: StudentProfile) {
     persistStudentProfile(localStorage, profile);
+    const subsection = profile.subsection.trim().toUpperCase();
+    if (subsection) {
+      localStorage.setItem(SELECTED_GROUP_KEY, subsection);
+      setSelectedGroup(subsection);
+      setShowPicker(false);
+    }
     setStudentProfile(profile);
     setShowProfileSetup(false);
     setIsProfileExpanded(false);

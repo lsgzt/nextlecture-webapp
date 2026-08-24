@@ -77,8 +77,8 @@ describe("timetable tRPC procedures", () => {
 
     expect(dashboard.timetable).toEqual(timetable);
     expect(refreshed.timetable).toEqual(timetable);
-    expect(timetableMocks.getOfficialTimetable).toHaveBeenNthCalledWith(1, false);
-    expect(timetableMocks.getOfficialTimetable).toHaveBeenNthCalledWith(2, true);
+    expect(timetableMocks.getOfficialTimetable).toHaveBeenNthCalledWith(1, false, "ITB2");
+    expect(timetableMocks.getOfficialTimetable).toHaveBeenNthCalledWith(2, true, "ITB2");
   });
 
   it("returns a typed not-found error for a removed or unknown group", async () => {

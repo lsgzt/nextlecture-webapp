@@ -31,10 +31,16 @@ export type TimetablePayload = {
   sourceGeneratedAt: string | null;
 };
 
+export type TimetableSourceValidators = {
+  etag: string | null;
+  lastModified: string | null;
+};
+
 export type TimetableCacheEnvelope = {
   data: TimetablePayload;
   fetchedAt: number;
   sourceUrl: string;
+  validators?: TimetableSourceValidators;
 };
 
 export type TimetableResponse = {

@@ -11,7 +11,7 @@ import { getPreviousPapers, getPreviousPaperSessions } from "./previousPapers";
 
 async function loadGroup(group: string, forceRefresh = false) {
   try {
-    const result = await getOfficialTimetable(forceRefresh);
+    const result = await getOfficialTimetable(forceRefresh, group);
     const timetable = findGroupTimetable(result.cache.data, group);
     if (!timetable) {
       throw new TRPCError({

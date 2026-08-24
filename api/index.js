@@ -203,7 +203,7 @@ var systemRouter = router({
 });
 
 // server/timetable.ts
-import { and, eq as eq2 } from "drizzle-orm";
+import { eq as eq2 } from "drizzle-orm";
 import { load } from "cheerio";
 
 // drizzle/schema.ts
@@ -227,7 +227,9 @@ var timetableCache = mysqlTable("timetable_cache", {
 });
 
 // shared/config.ts
-var TIMETABLE_SOURCE_URL = "https://appsc.gndec.ac.in/sites/default/files/2026-08/09_08_2026%20FINAL_FILE_subgroups_days_horizontal.html";
+var TIMETABLE_OFFICIAL_INDEX_URL = "https://appsc.gndec.ac.in/time_tables";
+var TIMETABLE_SOURCE_URL = "https://appsc.gndec.ac.in/sites/default/files/2026-08/23_08_2026%20FINAL_FILE%20R4_subgroups_days_horizontal.html";
+var TIMETABLE_SOURCE_FALLBACK_API_URL = "https://gndec-pyq-rag-api.vercel.app/api/timetable-source";
 var TEMPORARY_SECTION_SOURCE_PAGE_URL = "https://appsc.gndec.ac.in/time_tables";
 var SYLLABUS_SOURCE_URL = "https://appsc.gndec.ac.in/sites/default/files/2026-03/ss%20and%20Syllabus%20sem1%2C2%20Dec%202025%20unsigned.pdf";
 var TIMETABLE_CACHE_TTL_MS = 30 * 60 * 1e3;
@@ -293,6 +295,8 @@ async function getUserByOpenId(openId) {
 // server/timetable.ts
 var CACHE_KEY = "official-gnedc-timetable";
 var REQUEST_TIMEOUT_MS = 12e3;
+var SOURCE_RESOLUTION_TIMEOUT_MS = 7e3;
+var OFFICIAL_TIMETABLE_HOST = "appsc.gndec.ac.in";
 var inMemoryCache = null;
 var inFlightRefresh = null;
 function normalizeText(value) {
@@ -316,6 +320,79 @@ function minutesToTime(value) {
 }
 function cleanGroupCode(value) {
   return normalizeText(value).replace(/\s+Automatic Subgroup$/i, "").trim();
+}
+function asErrorMessage(error) {
+  return error instanceof Error ? error.message : "Unknown source-resolution failure.";
+}
+function validateOfficialTimetableUrl(candidate, baseUrl = TIMETABLE_OFFICIAL_INDEX_URL) {
+  if (!candidate || !candidate.trim()) return null;
+  try {
+    const parsed = new URL(candidate, baseUrl);
+    if (parsed.protocol !== "https:" || parsed.hostname !== OFFICIAL_TIMETABLE_HOST || !parsed.pathname.toLowerCase().endsWith(".html")) {
+      return null;
+    }
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+function discoverTimetableSourceFromIndexHtml(html, indexUrl = TIMETABLE_OFFICIAL_INDEX_URL) {
+  const $ = load(html);
+  let discovered = null;
+  $("a").each((_, anchor) => {
+    if (discovered) return;
+    const visibleText = normalizeText($(anchor).text());
+    if (!/sub[-\s]?section\s+wise/i.test(visibleText)) return;
+    discovered = validateOfficialTimetableUrl($(anchor).attr("href"), indexUrl);
+  });
+  return discovered;
+}
+function buildTimetableRequestHeaders(previousCache, sourceUrl) {
+  const headers = {
+    Accept: "text/html,application/xhtml+xml",
+    "User-Agent": "NextLecture/1.0 (GNDEC timetable companion)"
+  };
+  if (previousCache?.sourceUrl !== sourceUrl) return headers;
+  if (previousCache.validators?.etag) headers["If-None-Match"] = previousCache.validators.etag;
+  if (previousCache.validators?.lastModified) headers["If-Modified-Since"] = previousCache.validators.lastModified;
+  return headers;
+}
+async function resolveTimetableSource(options = {}) {
+  const fetcher = options.fetcher ?? fetch;
+  const officialIndexUrl = options.officialIndexUrl ?? TIMETABLE_OFFICIAL_INDEX_URL;
+  const fallbackApiUrl = options.fallbackApiUrl ?? TIMETABLE_SOURCE_FALLBACK_API_URL;
+  let officialError = null;
+  let fallbackError = null;
+  try {
+    const response = await fetcher(officialIndexUrl, {
+      headers: { Accept: "text/html,application/xhtml+xml", "User-Agent": "NextLecture/1.0 (official source discovery)" },
+      redirect: "error",
+      signal: AbortSignal.timeout(SOURCE_RESOLUTION_TIMEOUT_MS)
+    });
+    if (!response.ok) throw new Error(`The official timetable index responded with ${response.status}.`);
+    const discovered = discoverTimetableSourceFromIndexHtml(await response.text(), officialIndexUrl);
+    if (!discovered) throw new Error("The official timetable index did not contain a valid Sub-section wise HTML link.");
+    return { url: discovered, source: "official-index", officialError: null, fallbackError: null };
+  } catch (error) {
+    officialError = asErrorMessage(error);
+  }
+  try {
+    const response = await fetcher(fallbackApiUrl, {
+      headers: { Accept: "application/json", "User-Agent": "NextLecture/1.0 (timetable fallback)" },
+      redirect: "error",
+      signal: AbortSignal.timeout(SOURCE_RESOLUTION_TIMEOUT_MS)
+    });
+    if (!response.ok) throw new Error(`The timetable fallback responded with ${response.status}.`);
+    const payload = JSON.parse(await response.text());
+    const discovered = typeof payload.url === "string" ? validateOfficialTimetableUrl(payload.url, officialIndexUrl) : null;
+    if (!discovered) throw new Error("The timetable fallback did not provide a valid official GNDEC HTML URL.");
+    return { url: discovered, source: "vercel-fallback", officialError, fallbackError: null };
+  } catch (error) {
+    fallbackError = asErrorMessage(error);
+  }
+  const lastKnown = validateOfficialTimetableUrl(options.lastKnownSourceUrl, officialIndexUrl);
+  if (lastKnown) return { url: lastKnown, source: "last-known-good", officialError, fallbackError };
+  return { url: TIMETABLE_SOURCE_URL, source: "built-in", officialError, fallbackError };
 }
 function getSourceYears(html) {
   const $ = load(html);
@@ -368,9 +445,7 @@ function parseTimetableHtml(html) {
     const tableId = table.attr("id");
     const captionGroup = cleanGroupCode(table.find("caption .name").first().text());
     const dayHeaders = table.find("thead th.xAxis").map((__, header) => normalizeText($(header).text())).get().filter(isWeekday);
-    if (!tableId || !captionGroup || dayHeaders.length !== WEEKDAYS.length || seenGroups.has(captionGroup)) {
-      return;
-    }
+    if (!tableId || !captionGroup || dayHeaders.length !== WEEKDAYS.length || seenGroups.has(captionGroup)) return;
     const spanRemaining = Array.from({ length: WEEKDAYS.length }, () => 0);
     const lectures = [];
     const timeSlots = /* @__PURE__ */ new Set();
@@ -396,43 +471,30 @@ function parseTimetableHtml(html) {
     });
     const footerText = normalizeText(table.find("tr.foot").text());
     if (!sourceGeneratedAt && footerText) sourceGeneratedAt = footerText;
-    const group = {
-      code: captionGroup,
-      sourceYear: sourceYears.get(tableId) ?? "Official GNDEC timetable"
-    };
     timetables.push({
-      group,
+      group: { code: captionGroup, sourceYear: sourceYears.get(tableId) ?? "Official GNDEC timetable" },
       timeSlots: Array.from(timeSlots).sort((a, b) => a.localeCompare(b)),
-      lectures: lectures.sort((a, b) => {
-        const dayDifference = WEEKDAYS.indexOf(a.day) - WEEKDAYS.indexOf(b.day);
-        return dayDifference || a.startTime.localeCompare(b.startTime);
-      })
+      lectures: lectures.sort((a, b) => WEEKDAYS.indexOf(a.day) - WEEKDAYS.indexOf(b.day) || a.startTime.localeCompare(b.startTime))
     });
     seenGroups.add(captionGroup);
   });
-  if (timetables.length === 0) {
-    throw new Error("The official timetable did not contain any valid group tables.");
-  }
-  return {
-    groups: timetables.map((item) => item.group).sort((a, b) => a.code.localeCompare(b.code)),
-    timetables,
-    sourceGeneratedAt
-  };
+  if (!timetables.length) throw new Error("The official timetable did not contain any valid group tables.");
+  if (!timetables.some((item) => item.lectures.length > 0)) throw new Error("The official timetable did not contain enough valid lecture data.");
+  return { groups: timetables.map((item) => item.group).sort((a, b) => a.code.localeCompare(b.code)), timetables, sourceGeneratedAt };
 }
 function isValidEnvelope(value) {
   if (!value || typeof value !== "object") return false;
   const envelope = value;
-  return Boolean(
-    envelope.data && Array.isArray(envelope.data.groups) && Array.isArray(envelope.data.timetables) && typeof envelope.fetchedAt === "number" && envelope.data.timetables.length > 0 && envelope.data.timetables.every((item) => Array.isArray(item.timeSlots))
-  );
+  return Boolean(envelope.data && Array.isArray(envelope.data.groups) && Array.isArray(envelope.data.timetables) && typeof envelope.fetchedAt === "number" && typeof envelope.sourceUrl === "string" && envelope.data.timetables.length > 0);
 }
 async function readPersistentCache() {
   const db = await getDb();
   if (!db) return null;
   try {
-    const rows = await db.select({ payload: timetableCache.payload }).from(timetableCache).where(and(eq2(timetableCache.id, CACHE_KEY), eq2(timetableCache.sourceUrl, TIMETABLE_SOURCE_URL))).limit(1);
+    const rows = await db.select({ payload: timetableCache.payload, sourceUrl: timetableCache.sourceUrl }).from(timetableCache).where(eq2(timetableCache.id, CACHE_KEY)).limit(1);
     const parsed = rows[0] ? JSON.parse(rows[0].payload) : null;
-    return isValidEnvelope(parsed) ? parsed : null;
+    if (!isValidEnvelope(parsed)) return null;
+    return { ...parsed, sourceUrl: parsed.sourceUrl || rows[0]?.sourceUrl };
   } catch (error) {
     console.warn("[Timetable] Persistent cache could not be read:", error);
     return null;
@@ -442,45 +504,53 @@ async function persistCache(cache3) {
   const db = await getDb();
   if (!db) return;
   try {
-    await db.insert(timetableCache).values({
-      id: CACHE_KEY,
-      sourceUrl: TIMETABLE_SOURCE_URL,
-      payload: JSON.stringify(cache3),
-      fetchedAt: new Date(cache3.fetchedAt)
-    }).onDuplicateKeyUpdate({
-      set: {
-        payload: JSON.stringify(cache3),
-        fetchedAt: new Date(cache3.fetchedAt)
-      }
+    await db.insert(timetableCache).values({ id: CACHE_KEY, sourceUrl: cache3.sourceUrl, payload: JSON.stringify(cache3), fetchedAt: new Date(cache3.fetchedAt) }).onDuplicateKeyUpdate({
+      set: { sourceUrl: cache3.sourceUrl, payload: JSON.stringify(cache3), fetchedAt: new Date(cache3.fetchedAt) }
     });
   } catch (error) {
     console.warn("[Timetable] Persistent cache could not be saved:", error);
   }
 }
-async function fetchAndParseOfficialTimetable() {
-  const response = await fetch(TIMETABLE_SOURCE_URL, {
-    headers: {
-      Accept: "text/html,application/xhtml+xml",
-      "User-Agent": "NextLecture/1.0 (GNDEC timetable companion)"
-    },
+function assertTimetableIntegrity(data, requiredGroup) {
+  if (!data.timetables.length || !data.timetables.some((item) => item.lectures.length > 0)) throw new Error("The resolved source did not contain a usable timetable.");
+  if (requiredGroup && !findGroupTimetable(data, requiredGroup)) {
+    throw new Error(`The resolved source does not contain the saved subsection ${cleanGroupCode(requiredGroup).toUpperCase()}.`);
+  }
+}
+async function fetchAndParseOfficialTimetable(sourceUrl, previousCache, requiredGroup) {
+  const response = await fetch(sourceUrl, {
+    headers: buildTimetableRequestHeaders(previousCache, sourceUrl),
+    redirect: "error",
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
   });
+  if (response.status === 304) {
+    if (!previousCache || previousCache.sourceUrl !== sourceUrl) throw new Error("The official timetable returned an unusable not-modified response.");
+    return { ...previousCache, fetchedAt: Date.now(), validators: { etag: response.headers.get("etag") ?? previousCache.validators?.etag ?? null, lastModified: response.headers.get("last-modified") ?? previousCache.validators?.lastModified ?? null } };
+  }
   if (!response.ok) throw new Error(`The official timetable responded with ${response.status}.`);
   const html = await response.text();
+  if (!html.trim()) throw new Error("The official timetable returned an empty response.");
   const data = parseTimetableHtml(html);
+  assertTimetableIntegrity(data, requiredGroup);
   return {
     data,
     fetchedAt: Date.now(),
-    sourceUrl: TIMETABLE_SOURCE_URL
+    sourceUrl,
+    validators: { etag: response.headers.get("etag"), lastModified: response.headers.get("last-modified") }
   };
 }
-async function refreshCache() {
+async function refreshCache(previousCache, forceDataRefresh, requiredGroup) {
   if (!inFlightRefresh) {
-    inFlightRefresh = fetchAndParseOfficialTimetable().then(async (cache3) => {
+    inFlightRefresh = (async () => {
+      const resolution = await resolveTimetableSource({ lastKnownSourceUrl: previousCache?.sourceUrl ?? null });
+      const sourceChanged = previousCache?.sourceUrl !== resolution.url;
+      const cacheIsFresh = Boolean(previousCache && Date.now() - previousCache.fetchedAt < TIMETABLE_CACHE_TTL_MS);
+      if (previousCache && !forceDataRefresh && !sourceChanged && cacheIsFresh) return previousCache;
+      const cache3 = await fetchAndParseOfficialTimetable(resolution.url, sourceChanged ? null : previousCache, requiredGroup);
       inMemoryCache = cache3;
       await persistCache(cache3);
       return cache3;
-    }).finally(() => {
+    })().finally(() => {
       inFlightRefresh = null;
     });
   }
@@ -491,20 +561,19 @@ async function getKnownCache() {
   inMemoryCache = await readPersistentCache();
   return inMemoryCache;
 }
-async function getOfficialTimetable(forceRefresh = false) {
+async function getOfficialTimetable(forceRefresh = false, requiredGroup) {
   const previousCache = await getKnownCache();
-  const cacheIsFresh = previousCache && Date.now() - previousCache.fetchedAt < TIMETABLE_CACHE_TTL_MS;
-  if (!forceRefresh && cacheIsFresh) {
+  const cacheIsFresh = Boolean(previousCache && Date.now() - previousCache.fetchedAt < TIMETABLE_CACHE_TTL_MS);
+  if (!forceRefresh && previousCache && cacheIsFresh) {
+    void refreshCache(previousCache, false, requiredGroup).catch((error) => console.warn("[Timetable] Background source refresh failed:", error));
     return { cache: previousCache, freshness: "fresh", updateError: null };
   }
   try {
-    const cache3 = await refreshCache();
+    const cache3 = await refreshCache(previousCache, forceRefresh, requiredGroup);
     return { cache: cache3, freshness: "fresh", updateError: null };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "The timetable update failed.";
-    if (previousCache) {
-      return { cache: previousCache, freshness: "stale", updateError: message };
-    }
+    const message = asErrorMessage(error);
+    if (previousCache) return { cache: previousCache, freshness: "stale", updateError: message };
     throw new Error(`Could not update the official timetable: ${message}`);
   }
 }
@@ -949,7 +1018,7 @@ async function getPreviousPapers(sessionId) {
 // server/routers.ts
 async function loadGroup(group, forceRefresh = false) {
   try {
-    const result = await getOfficialTimetable(forceRefresh);
+    const result = await getOfficialTimetable(forceRefresh, group);
     const timetable = findGroupTimetable(result.cache.data, group);
     if (!timetable) {
       throw new TRPCError3({

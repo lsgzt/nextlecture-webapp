@@ -60,3 +60,12 @@
 - [x] Validate direct-PDF discovery against representative regular and makeup Drive sessions across multiple archive years, then document the coverage.
 - [x] Confirm the valid empty-session state for Makeup May 2025 is clear and non-erroring in production.
 - [x] Confirm production direct-link loading for a makeup session with published PDFs before final release.
+- [x] Inspect the current timetable source, parser, cache, refresh lifecycle, ETag handling, and saved-subsection filtering paths before modifying source resolution.
+- [x] Implement official-first source discovery from the permanent GNDEC timetable index using validated HTTPS `appsc.gndec.ac.in` subsection HTML links.
+- [x] Add a validated public Vercel timetable-source fallback, then last-known-good and built-in fallback ordering without replacing usable cached timetable data on failure.
+- [x] Preserve conditional request behavior per source URL, reset source-specific validators when the resolved URL changes, and keep saved subsection—not mentoring group—as the timetable key.
+- [x] Add resolver, invalid-URL, fallback-order, changed-source, cached-data, and subsection-focused tests; validate Previous Year Papers behavior remains unaffected.
+- [x] Make profile saves and updates immediately persist and activate `profile.subsection` as the dashboard timetable group in the current session.
+- [x] Add explicit resolver lifecycle tests for fresh-cache responsiveness, failed-refresh last-known-good preservation, and source-change validator clearing.
+- [x] Run a focused Previous Year Papers regression check after the timetable resolver changes and document the outcome.
+- [ ] Verify the complete resolver in production, document the optional `Timetable_url` Vercel variable for the owner, and deploy the release.
