@@ -5,6 +5,7 @@ export const STUDENT_PROFILE_KEY = "nextlecture:student-profile";
 export type ManualStudentProfileFields = {
   studentName: string;
   crn: string;
+  registrationNumber: string;
   fatherName: string;
   motherName: string;
   section: string;
@@ -44,6 +45,7 @@ export function createManualStudentProfile(branch: string, fields: ManualStudent
   return {
     studentName: fields.studentName.trim(),
     crn: fields.crn.trim(),
+    registrationNumber: fields.registrationNumber.trim() || null,
     fatherName: fields.fatherName.trim() || null,
     motherName: fields.motherName.trim() || null,
     branch,

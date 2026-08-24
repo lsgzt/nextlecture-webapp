@@ -13,6 +13,7 @@ export function getStudentProfileSubtitle(profile: StudentProfile) {
 
 export function getStudentProfileDetailFields(profile: StudentProfile): StudentProfileDetail[] {
   return [
+    { label: "Registration number", value: profile.registrationNumber ?? null },
     { label: "CRN", value: profile.crn },
     { label: "Father name", value: profile.fatherName },
     { label: "Mother name", value: profile.motherName },

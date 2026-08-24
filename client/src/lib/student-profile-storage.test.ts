@@ -11,6 +11,7 @@ describe("student profile local persistence", () => {
     const profile = createManualStudentProfile("IT", {
       studentName: "  Sam Singh  ",
       crn: " 2621555 ",
+      registrationNumber: " 202600111 ",
       fatherName: "  Raj Singh  ",
       motherName: "  Simran Kaur  ",
       section: " ITB ",
@@ -26,6 +27,7 @@ describe("student profile local persistence", () => {
     expect(readStoredStudentProfile(storage)).toMatchObject({
       studentName: "Sam Singh",
       crn: "2621555",
+      registrationNumber: "202600111",
       subsection: "ITB2",
       mentorMobileNumber: "9501011768",
       source: "manual",
@@ -35,6 +37,6 @@ describe("student profile local persistence", () => {
   it("keeps an invalid or unavailable local profile from breaking onboarding", () => {
     const storage = { getItem: () => "not-json", setItem: () => undefined };
     expect(readStoredStudentProfile(storage)).toBeNull();
-    expect(() => createManualStudentProfile("IT", { studentName: "", crn: "", fatherName: "", motherName: "", section: "", subsection: "", mentoringGroup: "", mentorName: "", mentorMobileNumber: "", venue: "" })).toThrow(/required/i);
+    expect(() => createManualStudentProfile("IT", { studentName: "", crn: "", registrationNumber: "", fatherName: "", motherName: "", section: "", subsection: "", mentoringGroup: "", mentorName: "", mentorMobileNumber: "", venue: "" })).toThrow(/required/i);
   });
 });

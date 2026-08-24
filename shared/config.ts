@@ -26,6 +26,7 @@ export const TIMETABLE_SOURCE_FALLBACK_API_URL = "https://gndec-pyq-rag-api.verc
  * host outage; normal refreshes always return to official discovery first.
  */
 export const TIMETABLE_EMERGENCY_SNAPSHOT_URL = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663345189289/WkXeXlTJxEDfZTUg.html";
+export const ANDROID_STUDENT_DIRECTORY_URL = "https://raw.githubusercontent.com/lsgzt/nextlecture-android/main/app/src/main/res/raw/student_directory_permanent_2026.json";
 
 /** Official index of the temporary-section documents used for first-run student profiles. */
 export const TEMPORARY_SECTION_SOURCE_PAGE_URL = "https://appsc.gndec.ac.in/time_tables";

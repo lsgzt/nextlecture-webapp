@@ -8,6 +8,7 @@ import { findGroupTimetable, getOfficialTimetable } from "./timetable";
 import { getTemporarySectionStudent, prepareTemporarySectionBranch, searchTemporarySectionStudents } from "./temporarySections";
 import { getOfficialSyllabusDocument } from "./syllabus";
 import { getPreviousPapers, getPreviousPaperSessions } from "./previousPapers";
+import { recoverAndroidRegistrationNumber } from "./androidProfileRecovery";
 
 async function loadGroup(group: string, forceRefresh = false) {
   try {
@@ -109,6 +110,24 @@ export const appRouter = router({
           throw new TRPCError({
             code: "BAD_GATEWAY",
             message: "We couldn't finish the official profile lookup. You can enter your profile manually instead.",
+            cause: error,
+          });
+        }
+      }),
+    androidRegistration: publicProcedure
+      .input(z.object({
+        crn: z.string().trim().regex(/^\d{6,16}$/),
+        branch: z.string().trim().toUpperCase().min(2).max(5),
+        studentName: z.string().trim().min(2).max(120),
+        subsection: z.string().trim().min(2).max(40),
+      }))
+      .query(async ({ input }) => {
+        try {
+          return await recoverAndroidRegistrationNumber(input);
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_GATEWAY",
+            message: "We couldn't prepare Android attendance sync right now. You can enter the registration number manually instead.",
             cause: error,
           });
         }

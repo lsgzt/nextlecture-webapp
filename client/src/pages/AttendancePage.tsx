@@ -10,7 +10,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { Calendar } from "@/components/ui/calendar";
 import { Slider } from "@/components/ui/slider";
 import { calculateAttendanceSummary, createAttendanceClient, formatLocalAttendanceDate, readAttendanceTarget, saveAttendanceTarget } from "@/lib/attendance";
-import { readStoredStudentProfile } from "@/lib/student-profile-storage";
+import { readStoredStudentProfile, saveStudentProfile } from "@/lib/student-profile-storage";
 import { DAY_ORDER, formatRange } from "@/lib/timetable-ui";
 import { trpc } from "@/lib/trpc";
 
@@ -42,7 +42,9 @@ function localRecordFromInput(input: AttendanceRecordInput): AttendanceRecord {
 }
 
 export default function AttendancePage() {
-  const [profile] = useState<StudentProfile | null>(() => readStoredStudentProfile(localStorage));
+  const [profile, setProfile] = useState<StudentProfile | null>(() => readStoredStudentProfile(localStorage));
+  const [registrationNumber, setRegistrationNumber] = useState(() => readStoredStudentProfile(localStorage)?.registrationNumber ?? "");
+  const [identityMessage, setIdentityMessage] = useState<string | null>(null);
   const [today] = useState(() => formatLocalAttendanceDate(new Date()));
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [target, setTarget] = useState(() => readAttendanceTarget(localStorage));
@@ -52,6 +54,15 @@ export default function AttendancePage() {
   const targetRef = useRef(target);
   const client = useMemo(() => createAttendanceClient({ storage: localStorage }), []);
   const profileGroup = profile?.subsection.trim().toUpperCase() ?? "";
+  const androidIdentityInput = useMemo(() => ({
+    crn: profile?.crn ?? "000000",
+    branch: profile?.branch ?? "XX",
+    studentName: profile?.studentName ?? "Unknown student",
+    subsection: profileGroup || "XX",
+  }), [profile?.branch, profile?.crn, profile?.studentName, profileGroup]);
+  const needsAndroidIdentityRecovery = Boolean(profile && !profile.registrationNumber && /^\d{6,16}$/.test(profile.crn));
+  const androidIdentityQuery = trpc.temporarySections.androidRegistration.useQuery(androidIdentityInput, { enabled: needsAndroidIdentityRecovery, retry: 0, staleTime: 6 * 60 * 60 * 1000 });
+  const attendanceIdentityReady = !needsAndroidIdentityRecovery || androidIdentityQuery.isError || (androidIdentityQuery.isSuccess && !androidIdentityQuery.data.registrationNumber);
   const dashboardQuery = trpc.timetable.dashboard.useQuery({ group: profileGroup || "ITB2" }, { enabled: Boolean(profileGroup), staleTime: 20 * 60 * 1000, retry: 1 });
   const cachedTimetable = useMemo(readCachedTimetable, []);
   const timetable = dashboardQuery.data?.timetable ?? (cachedTimetable?.timetable.group.code === profileGroup ? cachedTimetable.timetable : null);
@@ -59,8 +70,20 @@ export default function AttendancePage() {
 
   useEffect(() => { targetRef.current = target; }, [target]);
 
+  useEffect(() => {
+    const recoveredRegistrationNumber = androidIdentityQuery.data?.registrationNumber;
+    if (!profile || !recoveredRegistrationNumber || profile.registrationNumber === recoveredRegistrationNumber) return;
+    const updated = { ...profile, registrationNumber: recoveredRegistrationNumber, savedAt: Date.now() };
+    saveStudentProfile(localStorage, updated);
+    client.resetStoredIdentity();
+    setProfile(updated);
+    setRegistrationNumber(recoveredRegistrationNumber);
+    setHistory(null);
+    setIdentityMessage("Your Android attendance identity was matched from the verified student directory. Loading your shared server history now.");
+  }, [androidIdentityQuery.data?.registrationNumber, client, profile]);
+
   const loadHistory = useCallback(async () => {
-    if (!profile) return;
+    if (!profile || !attendanceIdentityReady) return;
     setIsLoadingHistory(true);
     setHistoryError(null);
     try {
@@ -71,7 +94,7 @@ export default function AttendancePage() {
     } finally {
       setIsLoadingHistory(false);
     }
-  }, [bounds.from, bounds.to, client, profile]);
+  }, [attendanceIdentityReady, bounds.from, bounds.to, client, profile]);
 
   useEffect(() => { void loadHistory(); }, [loadHistory]);
 
@@ -90,6 +113,22 @@ export default function AttendancePage() {
     setTarget(saveAttendanceTarget(localStorage, value[0] ?? 75));
   }
 
+  function saveAndroidIdentity(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!profile) return;
+    const normalizedRegistrationNumber = registrationNumber.trim() || null;
+    if ((profile.registrationNumber ?? null) === normalizedRegistrationNumber) {
+      setIdentityMessage("Your Android attendance identity is already linked.");
+      return;
+    }
+    const updated = { ...profile, registrationNumber: normalizedRegistrationNumber, savedAt: Date.now() };
+    saveStudentProfile(localStorage, updated);
+    client.resetStoredIdentity();
+    setProfile(updated);
+    setHistory(null);
+    setIdentityMessage(normalizedRegistrationNumber ? "Android attendance identity updated. Loading the matching server history now." : "Android attendance link removed. Add the registration number again to retrieve Android marks.");
+  }
+
   function applySynchronizedRecord(record: AttendanceRecordInput, status: AttendanceStatus | null) {
     setHistory(current => {
       const records = current?.records ?? [];
@@ -103,6 +142,8 @@ export default function AttendancePage() {
     <main className="container max-w-7xl py-6 sm:py-9">
       {!profile ? <section className="mx-auto max-w-xl rounded-3xl border border-border bg-card p-7 text-center shadow-sm"><ClipboardCheck className="mx-auto h-7 w-7 text-teal-700 dark:text-teal-300" /><h1 className="mt-4 font-display text-3xl font-semibold tracking-[-0.05em]">Set your profile first</h1><p className="mt-3 leading-7 text-muted-foreground">Attendance is personal to your saved GNDEC profile and timetable subsection. Set that up before adding any marks.</p><Link href="/app" className="mt-6 inline-flex min-h-11 items-center rounded-xl bg-teal-700 px-4 text-sm font-bold text-white transition hover:bg-teal-800">Open timetable setup</Link></section> : <>
         <section className="mb-6 grid gap-5 rounded-[1.6rem] border border-teal-200 bg-gradient-to-br from-teal-50 via-card to-card p-5 shadow-sm dark:border-teal-950/80 dark:from-teal-950/30 sm:p-7 lg:grid-cols-[1fr_auto] lg:items-end"><div><p className="eyebrow"><ClipboardCheck className="h-3.5 w-3.5" /> YOUR PERSONAL RECORD</p><h1 className="mt-3 font-display text-3xl font-semibold tracking-[-0.055em] sm:text-4xl">Attendance, on your terms.</h1><p className="mt-3 max-w-2xl leading-7 text-muted-foreground">This is a private manual tracker, not an official GNDEC attendance record. Marks are synced to your private attendance session and can be corrected anytime.</p></div><div className="rounded-2xl border border-teal-200 bg-white/80 px-4 py-3 text-sm shadow-sm dark:border-teal-900/60 dark:bg-teal-950/35"><p className="font-semibold text-teal-900 dark:text-teal-100">{profile.studentName} · {profileGroup}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Only your saved subsection is used for attendance keys.</p></div></section>
+
+        <section className="mb-6 rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="eyebrow">ANDROID SYNC</p><h2 className="mt-2 font-display text-xl font-semibold tracking-[-0.04em]">Link your Android attendance</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{needsAndroidIdentityRecovery ? androidIdentityQuery.isLoading ? "Matching your saved profile to the verified Android student directory before opening attendance history…" : "We will automatically use your matching Android registration number when it is available. You can enter it manually below if your profile is not found." : "Your Android-compatible profile identity is ready. The same server-side attendance record is used across both apps."}</p></div><form onSubmit={saveAndroidIdentity} className="flex w-full max-w-md flex-col gap-2 sm:w-auto sm:min-w-80"><label htmlFor="android-registration-number" className="text-sm font-bold">Registration number</label><div className="flex gap-2"><input id="android-registration-number" value={registrationNumber} onChange={event => { setRegistrationNumber(event.target.value); setIdentityMessage(null); }} placeholder="Exactly as in NextLecture Android" autoComplete="off" className="min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-teal-600 focus:ring-4 focus:ring-teal-600/10" /><button type="submit" className="min-h-10 shrink-0 rounded-xl bg-teal-700 px-3.5 text-sm font-bold text-white transition hover:bg-teal-800 active:scale-[0.97]">Link</button></div></form></div>{identityMessage && <p role="status" className="mt-3 text-sm font-medium text-teal-800 dark:text-teal-200">{identityMessage}</p>}</section>
 
         {historyError && <div role="alert" className="mb-5 flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-900/60 dark:bg-rose-950/25 dark:text-rose-100"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span><strong>Attendance sync needs attention.</strong> {historyError} <button type="button" onClick={() => void loadHistory()} className="ml-1 font-bold underline underline-offset-4">Try again</button></span></div>}
 

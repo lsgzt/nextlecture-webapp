@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ATTENDANCE_SESSION_KEY, calculateAttendanceSummary, clampAttendanceTarget, createAttendanceClient, createLectureKey, createProfileFingerprint, readAttendanceTarget, saveAttendanceTarget } from "./attendance";
 
-const profile = { studentName: "Student", crn: "2621101", fatherName: null, motherName: null, branch: "IT", section: "ITB", subsection: "ITB2", mentoringGroup: "ITBM2", mentorName: null, mentorMobileNumber: null, venue: null, source: "official" as const, sourceUrl: null, savedAt: 1 };
+const profile = { studentName: "Student", crn: "2621101", registrationNumber: "202600011", fatherName: null, motherName: null, branch: "IT", section: "ITB", subsection: "ITB2", mentoringGroup: "ITBM2", mentorName: null, mentorMobileNumber: null, venue: null, source: "official" as const, sourceUrl: null, savedAt: 1 };
 
 function memoryStorage(seed: Record<string, string> = {}) {
   const values = new Map(Object.entries(seed));
@@ -9,11 +9,12 @@ function memoryStorage(seed: Record<string, string> = {}) {
 }
 
 describe("attendance identity and local target", () => {
-  it("creates a deterministic fingerprint from CRN, branch, saved subsection, and name without mentoring group", async () => {
+  it("creates the Android-compatible fingerprint from registration number, CRN, branch, saved subsection, and name without mentoring group", async () => {
     const fingerprint = await createProfileFingerprint(profile);
     expect(fingerprint).toMatch(/^[a-f0-9]{64}$/);
     expect(fingerprint).toBe(await createProfileFingerprint({ ...profile, mentoringGroup: "Changed" }));
     expect(fingerprint).not.toBe(await createProfileFingerprint({ ...profile, subsection: "ITB1" }));
+    expect(fingerprint).not.toBe(await createProfileFingerprint({ ...profile, registrationNumber: "202600012" }));
   });
 
   it("uses the Android-compatible date and timetable fields for lecture keys", async () => {
@@ -47,7 +48,7 @@ describe("attendance API client", () => {
       new Response(JSON.stringify({ studentId: "owner-a", accessToken: "opaque-a", issuedAt: "2026-08-24T00:00:00Z" }), { status: 200 }),
       new Response(JSON.stringify({ error: "expired" }), { status: 401 }),
       new Response(JSON.stringify({ studentId: "owner-a", accessToken: "opaque-b", issuedAt: "2026-08-24T00:01:00Z" }), { status: 200 }),
-      new Response(JSON.stringify({ attendance_date: "2026-08-24", lecture_key: "key", status: "present" }), { status: 200 }),
+      new Response(JSON.stringify({ record: { attendance_date: "2026-08-24", lecture_key: "key", status: "present" } }), { status: 200 }),
     ];
     const fetcher = vi.fn(async () => responses.shift()!);
     const client = createAttendanceClient({ storage, fetcher });
@@ -86,8 +87,8 @@ describe("attendance API client", () => {
     const storage = memoryStorage({ "nextlecture:attendance:installation:v1": "installation-for-tests" });
     const responses = [
       new Response(JSON.stringify({ studentId: "owner-a", accessToken: "opaque-a", issuedAt: "2026-08-24T00:00:00Z" }), { status: 200 }),
-      new Response(JSON.stringify({ attendance_date: "2026-08-24", lecture_key: "key", status: "present" }), { status: 200 }),
-      new Response(JSON.stringify({ attendance_date: "2026-08-24", lecture_key: "key", status: "absent" }), { status: 200 }),
+      new Response(JSON.stringify({ record: { attendance_date: "2026-08-24", lecture_key: "key", status: "present" } }), { status: 200 }),
+      new Response(JSON.stringify({ record: { attendance_date: "2026-08-24", lecture_key: "key", status: "absent" } }), { status: 200 }),
       new Response(null, { status: 204 }),
       new Response(JSON.stringify({ from: "2026-08-01", to: "2026-08-24", records: [] }), { status: 200 }),
     ];
@@ -99,5 +100,28 @@ describe("attendance API client", () => {
     await expect(client.clearRecord(profile, record.attendanceDate, record.lectureKey)).resolves.toBeUndefined();
     await expect(client.getHistory(profile, "2026-08-01", "2026-08-24", 75)).resolves.toMatchObject({ records: [] });
     expect(fetcher).toHaveBeenCalledTimes(5);
+  });
+
+  it("normalizes Android record envelopes and rotates a previously mismatched local installation identity", async () => {
+    const storage = memoryStorage({
+      "nextlecture:attendance:installation:v1": "installation-for-tests",
+      [ATTENDANCE_SESSION_KEY]: JSON.stringify({ studentId: "old-owner", accessToken: "old-token", issuedAt: "2026-08-24T00:00:00Z", profileFingerprint: "old-fingerprint" }),
+    });
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({
+      studentId: "android-owner",
+      accessToken: "fresh-token",
+      issuedAt: "2026-08-24T00:00:00Z",
+    }), { status: 200 }));
+    const client = createAttendanceClient({ storage, fetcher });
+
+    client.resetStoredIdentity();
+    expect(storage.getItem("nextlecture:attendance:installation:v1")).toBeNull();
+    expect(storage.getItem(ATTENDANCE_SESSION_KEY)).toBeNull();
+
+    const recordClient = createAttendanceClient({ storage: memoryStorage({ "nextlecture:attendance:installation:v1": "fresh-installation-for-tests" }), fetcher: vi.fn(async (url: string) => {
+      if (url === "/api/attendance/session") return new Response(JSON.stringify({ studentId: "android-owner", accessToken: "fresh-token", issuedAt: "2026-08-24T00:00:00Z" }), { status: 200 });
+      return new Response(JSON.stringify({ record: { attendance_date: "2026-08-24", lecture_key: "key", status: "present" } }), { status: 200 });
+    }) });
+    await expect(recordClient.saveRecord(profile, { attendanceDate: "2026-08-24", lectureKey: "key", status: "present", subject: "Math", teacher: "", venue: "", startMinutes: 600, endMinutes: 650 })).resolves.toMatchObject({ lecture_key: "key", status: "present" });
   });
 });

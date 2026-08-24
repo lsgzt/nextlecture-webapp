@@ -6,6 +6,8 @@ export type StudentProfile = {
   studentName: string;
   /** GNDEC's Class Roll Number (CRN) is the official roll number in the revised PDFs. */
   crn: string;
+  /** Optional compatibility field used to locate the same attendance owner as NextLecture Android. */
+  registrationNumber?: string | null;
   fatherName: string | null;
   motherName: string | null;
   branch: string;

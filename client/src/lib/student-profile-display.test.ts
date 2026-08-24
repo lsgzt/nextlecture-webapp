@@ -28,7 +28,8 @@ describe("student profile display helpers", () => {
   it("returns the full official information only for the expanded profile section", () => {
     const details = getStudentProfileDetailFields(profile);
     expect(details).toContainEqual({ label: "Mentor mobile", value: "8968801937" });
+    expect(details).toContainEqual({ label: "Registration number", value: null });
     expect(details.map(detail => detail.label)).not.toContain("Serial number");
-    expect(details).toHaveLength(10);
+    expect(details).toHaveLength(11);
   });
 });

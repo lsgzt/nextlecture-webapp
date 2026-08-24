@@ -84,3 +84,10 @@
 - [x] Re-validate timetable group loading and dashboard data, plus attendance, Syllabus AI, and Previous Year Papers regressions.
 - [x] Deploy the timetable recovery to GitHub and Vercel, then document the root cause and live verification.
 - [x] Confirm and document that production is serving timetable recovery commit 59aeb74, including the emergency snapshot fallback design and post-deploy `/app` group-loading evidence.
+- [x] Inspect the Android attendance backend contract, deployed API responses, web profile fingerprint, and session model without changing Android, Supabase, or API code.
+- [x] Move attendance controls and summaries out of the timetable dashboard so attendance is accessed through the existing View attendance action and the next lecture remains the primary dashboard focus.
+- [x] Update the web-only attendance identity, session, and history client to retrieve and write the same records as the Android app through the deployed API.
+- [x] Add cross-platform compatibility tests and regression-test timetable, attendance, papers, and Syllabus AI behavior.
+- [ ] Deploy the web-only dashboard and attendance synchronization repair to GitHub and Vercel, then verify the live API behavior.
+- [ ] Extend the web profile pipeline to automatically resolve and persist the Android-compatible registration number for official saved profiles, with a manual recovery fallback only when no verified match is available.
+- [ ] Verify and document an end-to-end web profile flow that recovers an Android-style attendance owner and reads its existing server record without duplicate marking.

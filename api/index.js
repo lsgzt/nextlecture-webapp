@@ -231,6 +231,7 @@ var TIMETABLE_OFFICIAL_INDEX_URL = "https://appsc.gndec.ac.in/time_tables";
 var TIMETABLE_SOURCE_URL = "https://appsc.gndec.ac.in/sites/default/files/2026-08/23_08_2026%20FINAL_FILE%20R4_subgroups_days_horizontal.html";
 var TIMETABLE_SOURCE_FALLBACK_API_URL = "https://gndec-pyq-rag-api.vercel.app/api/timetable-source";
 var TIMETABLE_EMERGENCY_SNAPSHOT_URL = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663345189289/WkXeXlTJxEDfZTUg.html";
+var ANDROID_STUDENT_DIRECTORY_URL = "https://raw.githubusercontent.com/lsgzt/nextlecture-android/main/app/src/main/res/raw/student_directory_permanent_2026.json";
 var TEMPORARY_SECTION_SOURCE_PAGE_URL = "https://appsc.gndec.ac.in/time_tables";
 var SYLLABUS_SOURCE_URL = "https://appsc.gndec.ac.in/sites/default/files/2026-03/ss%20and%20Syllabus%20sem1%2C2%20Dec%202025%20unsigned.pdf";
 var TIMETABLE_CACHE_TTL_MS = 30 * 60 * 1e3;
@@ -1042,6 +1043,37 @@ async function getPreviousPapers(sessionId) {
   return { session, papers, fetchedAt, freshness: "fresh" };
 }
 
+// server/androidProfileRecovery.ts
+var CACHE_TTL_MS2 = 6 * 60 * 60 * 1e3;
+var cachedDirectory = null;
+function normalize(value) {
+  return (value ?? "").trim().toUpperCase().replace(/\s+/g, " ").replace(/[^A-Z0-9 ]/g, "");
+}
+function normalizeRecord(value) {
+  if (!value || typeof value !== "object") return null;
+  const record = value;
+  if (typeof record.crn !== "string" || typeof record.registrationNumber !== "string" || typeof record.candidateName !== "string" || typeof record.branch !== "string" || typeof record.subsection !== "string") return null;
+  return record;
+}
+async function getAndroidStudentDirectory(fetcher = fetch) {
+  if (cachedDirectory && Date.now() - cachedDirectory.fetchedAt < CACHE_TTL_MS2) return cachedDirectory.records;
+  const response = await fetcher(ANDROID_STUDENT_DIRECTORY_URL, { headers: { Accept: "application/json" } });
+  if (!response.ok) throw new Error("The Android student directory is unavailable.");
+  const payload = await response.json();
+  if (!Array.isArray(payload)) throw new Error("The Android student directory had an invalid format.");
+  const records = payload.map(normalizeRecord).filter((record) => Boolean(record));
+  if (!records.length) throw new Error("The Android student directory did not contain usable profiles.");
+  cachedDirectory = { records, fetchedAt: Date.now() };
+  return records;
+}
+async function recoverAndroidRegistrationNumber(input, fetcher = fetch) {
+  const records = await getAndroidStudentDirectory(fetcher);
+  const match = records.find(
+    (record) => normalize(record.crn) === normalize(input.crn) && normalize(record.branch) === normalize(input.branch) && normalize(record.subsection) === normalize(input.subsection) && normalize(record.candidateName) === normalize(input.studentName)
+  );
+  return { registrationNumber: match?.registrationNumber?.trim() || null };
+}
+
 // server/routers.ts
 async function loadGroup(group, forceRefresh = false) {
   try {
@@ -1132,6 +1164,22 @@ var appRouter = router({
         throw new TRPCError3({
           code: "BAD_GATEWAY",
           message: "We couldn't finish the official profile lookup. You can enter your profile manually instead.",
+          cause: error
+        });
+      }
+    }),
+    androidRegistration: publicProcedure.input(z2.object({
+      crn: z2.string().trim().regex(/^\d{6,16}$/),
+      branch: z2.string().trim().toUpperCase().min(2).max(5),
+      studentName: z2.string().trim().min(2).max(120),
+      subsection: z2.string().trim().min(2).max(40)
+    })).query(async ({ input }) => {
+      try {
+        return await recoverAndroidRegistrationNumber(input);
+      } catch (error) {
+        throw new TRPCError3({
+          code: "BAD_GATEWAY",
+          message: "We couldn't prepare Android attendance sync right now. You can enter the registration number manually instead.",
           cause: error
         });
       }

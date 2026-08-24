@@ -31,9 +31,9 @@ export async function sha256LowercaseHex(value: string) {
   return bytesToHex(new Uint8Array(digest));
 }
 
-/** Uses an empty registration-number component because the current web profile only stores CRN. */
+/** Matches Android exactly: registration number, CRN, branch, saved subsection, then student name. */
 export async function createProfileFingerprint(profile: StudentProfile) {
-  return sha256LowercaseHex(["", normalize(profile.crn), normalize(profile.branch), normalize(profile.subsection), normalize(profile.studentName)].join("|"));
+  return sha256LowercaseHex([normalize(profile.registrationNumber), normalize(profile.crn), normalize(profile.branch), normalize(profile.subsection), normalize(profile.studentName)].join("|"));
 }
 
 export function getInstallationId(storage: StorageLike) {
@@ -186,11 +186,16 @@ export function createAttendanceClient({ storage, fetcher = fetch }: { storage: 
       return authenticatedRequest<AttendanceHistory>(profile, `?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&target=${clampAttendanceTarget(target)}`, { method: "GET" });
     },
     async saveRecord(profile: StudentProfile, record: AttendanceRecordInput) {
-      return authenticatedRequest<AttendanceRecord>(profile, "/records", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(record) });
+      const response = await authenticatedRequest<AttendanceRecord | { record?: AttendanceRecord }>(profile, "/records", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(record) });
+      return response && typeof response === "object" && "record" in response && response.record ? response.record : response as AttendanceRecord;
     },
     async clearRecord(profile: StudentProfile, attendanceDate: string, lectureKey: string) {
       return authenticatedRequest<{ ok?: boolean }>(profile, `/records?date=${encodeURIComponent(attendanceDate)}&lectureKey=${encodeURIComponent(lectureKey)}`, { method: "DELETE" });
     },
     clearStoredSession() { storage.removeItem(ATTENDANCE_SESSION_KEY); },
+    resetStoredIdentity() {
+      storage.removeItem(ATTENDANCE_SESSION_KEY);
+      storage.removeItem(ATTENDANCE_INSTALLATION_KEY);
+    },
   };
 }
