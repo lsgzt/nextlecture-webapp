@@ -75,7 +75,7 @@
 - [x] Add server-synchronized attendance list, present/absent upsert, clear, cross-platform lecture-key generation, bounded history loading, local target persistence, and client-side target guidance calculations.
 - [x] Add a discoverable View attendance profile action, timetable lecture marking controls, and a responsive Attendance page with target controls, calendar/date navigation, metrics, and manual-tracker disclosure.
 - [x] Add tests for session identity recovery and isolation, record lifecycle, target persistence and calculations, retry behavior, subsection matching, and timetable/PYQ/Syllabus regressions.
-- [ ] Verify the production attendance API CORS and authenticated browser flow, deploy the feature, and document any owner-only configuration without committing supplied secrets.
+- [x] Verify the production attendance API CORS and authenticated browser flow, deploy the feature, and document any owner-only configuration without committing supplied secrets.
 - [x] Handle empty successful DELETE responses and verify the proxy-mediated save-update-clear-read lifecycle.
 - [x] Add coverage for same-fingerprint session recovery across installations and fingerprint isolation, plus clear/delete client lifecycle behavior.
 - [x] Run and document an end-to-end smoke test through NextLecture’s same-origin attendance proxy for session creation, present write, absent update, clear, and post-clear read.

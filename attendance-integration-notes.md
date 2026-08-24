@@ -8,6 +8,10 @@ On the implementation date, a synthetic production smoke test successfully creat
 
 A second smoke test hosted the NextLecture Express app on a local ephemeral port with `ATTENDANCE_API_BASE` set for that process. It exercised the same-origin `/api/attendance/*` proxy end to end: session creation, present write, absent update, authenticated history read, clear/delete, and post-clear absence. The generated test record was removed successfully, and no opaque token or identity value was logged.
 
+The external Vercel URL was checked after checkpointing and still returned `Cannot GET /api/attendance`, indicating that it is serving the pre-attendance GitHub deployment. The managed static preview domain returns the frontend 404 route for the API path, so it is not a suitable host for this Express-backed proxy. The user’s Vercel project must receive commit `b2fd95b` and be configured with `ATTENDANCE_API_BASE` before a final production proxy check can pass.
+
+After pushing commit `b2fd95b` to the user’s GitHub repository, the Vercel endpoint returned the expected unauthenticated attendance response rather than a missing route. A final synthetic end-to-end smoke test then verified the live same-origin proxy’s session creation, present write, absent update, authenticated history read, clear/delete, and post-clear read. It used generated values only, removed the test record, and did not log any bearer token or personal identifier.
+
 ## Implementation contracts
 
 The browser will generate a stable installation ID locally. Its attendance owner fingerprint is SHA-256 over `""|crn|branch|subsection|studentName`, because the existing GNDEC profile model does not expose a separate registration-number field and CRN is its documented roll-number value. The browser sends only that digest plus branch, subsection, and timetable group to the session endpoint.
