@@ -96,5 +96,6 @@
 - [x] Reproduce the reported attendance data persistence when switching between saved student profiles and inspect profile, session, and history state boundaries.
 - [x] Make attendance sessions, history data, pending mutations, and display state profile-aware so one student’s records cannot remain visible after another profile is selected.
 - [x] Add automated profile-switching coverage for two distinct attendance owners and regression-test timetable and attendance controls.
-- [ ] Deploy and verify the profile-switching repair through the live web proxy without exposing personal attendance data.
+- [x] Deploy and verify the profile-switching repair through the live web proxy without exposing personal attendance data.
 - [x] Run and document a deterministic two-profile web attendance reproduction that verifies the session, history, and visible record boundary before deployment.
+- [x] Run and document a live token-safe two-profile owner-isolation smoke test through nextlecture.vercel.app, confirming no records cross between profile scopes.
