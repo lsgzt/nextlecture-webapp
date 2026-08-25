@@ -9,7 +9,7 @@ import { AttendanceControls } from "@/components/AttendanceControls";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Calendar } from "@/components/ui/calendar";
 import { Slider } from "@/components/ui/slider";
-import { calculateAttendanceSummary, createAttendanceClient, formatLocalAttendanceDate, readAttendanceTarget, saveAttendanceTarget } from "@/lib/attendance";
+import { calculateAttendanceSummary, createAttendanceClient, formatLocalAttendanceDate, getAttendanceProfileScope, readAttendanceTarget, saveAttendanceTarget } from "@/lib/attendance";
 import { readStoredStudentProfile, saveStudentProfile } from "@/lib/student-profile-storage";
 import { DAY_ORDER, formatRange } from "@/lib/timetable-ui";
 import { trpc } from "@/lib/trpc";
@@ -50,10 +50,15 @@ export default function AttendancePage() {
   const [target, setTarget] = useState(() => readAttendanceTarget(localStorage));
   const [history, setHistory] = useState<AttendanceHistory | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyScope, setHistoryScope] = useState("");
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const targetRef = useRef(target);
+  const activeProfileScopeRef = useRef("");
+  const historyRequestRef = useRef(0);
   const client = useMemo(() => createAttendanceClient({ storage: localStorage }), []);
   const profileGroup = profile?.subsection.trim().toUpperCase() ?? "";
+  const profileScope = profile ? getAttendanceProfileScope(profile) : "";
+  activeProfileScopeRef.current = profileScope;
   const androidIdentityInput = useMemo(() => ({
     crn: profile?.crn ?? "000000",
     branch: profile?.branch ?? "XX",
@@ -71,6 +76,36 @@ export default function AttendancePage() {
   useEffect(() => { targetRef.current = target; }, [target]);
 
   useEffect(() => {
+    function refreshSavedProfile() {
+      const nextProfile = readStoredStudentProfile(localStorage);
+      const nextScope = nextProfile ? getAttendanceProfileScope(nextProfile) : "";
+      if (nextScope === activeProfileScopeRef.current) return;
+      historyRequestRef.current += 1;
+      setProfile(nextProfile);
+      setRegistrationNumber(nextProfile?.registrationNumber ?? "");
+      setHistory(null);
+      setHistoryScope("");
+      setHistoryError(null);
+      setIdentityMessage(null);
+      setIsLoadingHistory(false);
+    }
+    window.addEventListener("focus", refreshSavedProfile);
+    window.addEventListener("storage", refreshSavedProfile);
+    return () => {
+      window.removeEventListener("focus", refreshSavedProfile);
+      window.removeEventListener("storage", refreshSavedProfile);
+    };
+  }, []);
+
+  useEffect(() => {
+    historyRequestRef.current += 1;
+    setHistory(null);
+    setHistoryScope("");
+    setHistoryError(null);
+    setIsLoadingHistory(false);
+  }, [profileScope]);
+
+  useEffect(() => {
     const recoveredRegistrationNumber = androidIdentityQuery.data?.registrationNumber;
     if (!profile || !recoveredRegistrationNumber || profile.registrationNumber === recoveredRegistrationNumber) return;
     const updated = { ...profile, registrationNumber: recoveredRegistrationNumber, savedAt: Date.now() };
@@ -84,22 +119,28 @@ export default function AttendancePage() {
 
   const loadHistory = useCallback(async () => {
     if (!profile || !attendanceIdentityReady) return;
+    const requestScope = profileScope;
+    const requestId = ++historyRequestRef.current;
     setIsLoadingHistory(true);
     setHistoryError(null);
     try {
       const response = await client.getHistory(profile, bounds.from, bounds.to, targetRef.current);
+      if (historyRequestRef.current !== requestId || activeProfileScopeRef.current !== requestScope) return;
       setHistory({ ...response, from: response.from || bounds.from, to: response.to || bounds.to, records: Array.isArray(response.records) ? response.records : [] });
+      setHistoryScope(requestScope);
     } catch (reason) {
+      if (historyRequestRef.current !== requestId || activeProfileScopeRef.current !== requestScope) return;
       setHistoryError(reason instanceof Error ? reason.message : "Attendance history could not be loaded.");
     } finally {
-      setIsLoadingHistory(false);
+      if (historyRequestRef.current === requestId && activeProfileScopeRef.current === requestScope) setIsLoadingHistory(false);
     }
-  }, [attendanceIdentityReady, bounds.from, bounds.to, client, profile]);
+  }, [attendanceIdentityReady, bounds.from, bounds.to, client, profile, profileScope]);
 
   useEffect(() => { void loadHistory(); }, [loadHistory]);
 
-  const recordsByKey = useMemo(() => Object.fromEntries((history?.records ?? []).map(record => [record.lecture_key, record.status])) as Record<string, AttendanceStatus>, [history]);
-  const summary = useMemo(() => calculateAttendanceSummary(history?.records ?? [], target), [history?.records, target]);
+  const visibleHistory = historyScope === profileScope ? history : null;
+  const recordsByKey = useMemo(() => Object.fromEntries((visibleHistory?.records ?? []).map(record => [record.lecture_key, record.status])) as Record<string, AttendanceStatus>, [visibleHistory]);
+  const summary = useMemo(() => calculateAttendanceSummary(visibleHistory?.records ?? [], target), [visibleHistory?.records, target]);
   const selectedDateKey = formatLocalAttendanceDate(selectedDate);
   const selectedDay = weekdayFor(selectedDate);
   const selectedLectures = useMemo(() => selectedDay && timetable ? timetable.lectures.filter(lecture => lecture.day === selectedDay) : [], [selectedDay, timetable]);
@@ -130,7 +171,10 @@ export default function AttendancePage() {
   }
 
   function applySynchronizedRecord(record: AttendanceRecordInput, status: AttendanceStatus | null) {
+    const mutationScope = profileScope;
+    if (activeProfileScopeRef.current !== mutationScope) return;
     setHistory(current => {
+      if (activeProfileScopeRef.current !== mutationScope || historyScope !== mutationScope) return current;
       const records = current?.records ?? [];
       const withoutCurrent = records.filter(item => item.lecture_key !== record.lectureKey);
       return { from: current?.from ?? bounds.from, to: current?.to ?? bounds.to, records: status ? [...withoutCurrent, localRecordFromInput({ ...record, status })] : withoutCurrent, summary: current?.summary ?? summary };

@@ -1,9 +1,9 @@
 import { Check, LoaderCircle, RotateCcw, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AttendanceRecordInput, AttendanceStatus } from "@shared/attendance";
 import type { StudentProfile } from "@shared/student-profile";
 import type { Lecture } from "@shared/timetable";
-import { createAttendanceClient, createAttendanceRecordInput, createLectureKey } from "@/lib/attendance";
+import { createAttendanceClient, createAttendanceRecordInput, createLectureKey, getAttendanceProfileScope } from "@/lib/attendance";
 
 type AttendanceControlsProps = {
   profile: StudentProfile;
@@ -21,6 +21,16 @@ export function AttendanceControls({ profile, groupName, attendanceDate, lecture
   const [pending, setPending] = useState<AttendanceStatus | "clear" | null>(null);
   const [status, setStatus] = useState<AttendanceStatus | undefined>();
   const [error, setError] = useState<string | null>(null);
+  const profileScope = getAttendanceProfileScope(profile);
+  const profileScopeRef = useRef(profileScope);
+
+  useEffect(() => { profileScopeRef.current = profileScope; }, [profileScope]);
+
+  useEffect(() => {
+    setPending(null);
+    setStatus(undefined);
+    setError(null);
+  }, [profileScope]);
 
   useEffect(() => {
     let active = true;
@@ -37,33 +47,39 @@ export function AttendanceControls({ profile, groupName, attendanceDate, lecture
   }, [lectureKey, recordsByKey]);
 
   async function mark(nextStatus: AttendanceStatus) {
+    const mutationScope = profileScope;
     setPending(nextStatus);
     setError(null);
     try {
       const record = await createAttendanceRecordInput(attendanceDate, groupName, lecture, nextStatus);
       await client.saveRecord(profile, record);
+      if (profileScopeRef.current !== mutationScope) return;
       setStatus(nextStatus);
       onSynchronized?.(record, nextStatus);
     } catch (reason) {
+      if (profileScopeRef.current !== mutationScope) return;
       setError(reason instanceof Error ? reason.message : "Attendance could not be saved. Please try again.");
     } finally {
-      setPending(null);
+      if (profileScopeRef.current === mutationScope) setPending(null);
     }
   }
 
   async function clear() {
     if (!lectureKey) return;
+    const mutationScope = profileScope;
     setPending("clear");
     setError(null);
     try {
       await client.clearRecord(profile, attendanceDate, lectureKey);
       const record = await createAttendanceRecordInput(attendanceDate, groupName, lecture, status ?? "present");
+      if (profileScopeRef.current !== mutationScope) return;
       setStatus(undefined);
       onSynchronized?.(record, null);
     } catch (reason) {
+      if (profileScopeRef.current !== mutationScope) return;
       setError(reason instanceof Error ? reason.message : "Attendance could not be cleared. Please try again.");
     } finally {
-      setPending(null);
+      if (profileScopeRef.current === mutationScope) setPending(null);
     }
   }
 

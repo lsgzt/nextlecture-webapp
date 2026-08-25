@@ -4,6 +4,7 @@ import type { AttendanceHistory, AttendanceRecord, AttendanceRecordInput, Attend
 
 export const ATTENDANCE_INSTALLATION_KEY = "nextlecture:attendance:installation:v1";
 export const ATTENDANCE_SESSION_KEY = "nextlecture:attendance:session:v1";
+export const ATTENDANCE_PROFILE_SCOPE_KEY = "nextlecture:attendance:profile-scope:v1";
 export const ATTENDANCE_TARGET_KEY = "nextlecture:attendance:target:v1";
 
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
@@ -34,6 +35,11 @@ export async function sha256LowercaseHex(value: string) {
 /** Matches Android exactly: registration number, CRN, branch, saved subsection, then student name. */
 export async function createProfileFingerprint(profile: StudentProfile) {
   return sha256LowercaseHex([normalize(profile.registrationNumber), normalize(profile.crn), normalize(profile.branch), normalize(profile.subsection), normalize(profile.studentName)].join("|"));
+}
+
+/** Stable local scope used to prevent one saved student's session or UI state being reused for another. */
+export function getAttendanceProfileScope(profile: StudentProfile) {
+  return [normalize(profile.registrationNumber), normalize(profile.crn), normalize(profile.branch), normalize(profile.subsection), normalize(profile.studentName)].join("|");
 }
 
 export function getInstallationId(storage: StorageLike) {
@@ -132,6 +138,17 @@ async function responseMessage(response: Response) {
 }
 
 export function createAttendanceClient({ storage, fetcher = fetch }: { storage: StorageLike; fetcher?: FetchLike }) {
+  function ensureProfileScope(profile: StudentProfile) {
+    const scope = getAttendanceProfileScope(profile);
+    const previous = storage.getItem(ATTENDANCE_PROFILE_SCOPE_KEY);
+    if (previous && previous !== scope) {
+      storage.removeItem(ATTENDANCE_SESSION_KEY);
+      storage.removeItem(ATTENDANCE_INSTALLATION_KEY);
+    }
+    storage.setItem(ATTENDANCE_PROFILE_SCOPE_KEY, scope);
+    return scope;
+  }
+
   async function createSession(profile: StudentProfile, profileFingerprint: string) {
     const response = await fetcher("/api/attendance/session", {
       method: "POST",
@@ -152,6 +169,7 @@ export function createAttendanceClient({ storage, fetcher = fetch }: { storage: 
   }
 
   async function withSession<T>(profile: StudentProfile, operation: (token: string) => Promise<T>) {
+    ensureProfileScope(profile);
     const profileFingerprint = await createProfileFingerprint(profile);
     let session = readStoredSession(storage, profileFingerprint) ?? await createSession(profile, profileFingerprint);
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -196,6 +214,7 @@ export function createAttendanceClient({ storage, fetcher = fetch }: { storage: 
     resetStoredIdentity() {
       storage.removeItem(ATTENDANCE_SESSION_KEY);
       storage.removeItem(ATTENDANCE_INSTALLATION_KEY);
+      storage.removeItem(ATTENDANCE_PROFILE_SCOPE_KEY);
     },
   };
 }

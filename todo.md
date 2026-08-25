@@ -93,3 +93,8 @@
 - [x] Verify and document an end-to-end web profile flow that recovers an Android-style attendance owner and reads its existing server record without duplicate marking.
 - [x] Verify the configured production web profile flow against the account owner’s own Android attendance record without viewing or exposing any other student’s data.
 - [x] Run and document a synthetic end-to-end smoke test through the live NextLecture attendance proxy, covering profile-compatible session recovery, record visibility, write, and cleanup without exposing a bearer token.
+- [x] Reproduce the reported attendance data persistence when switching between saved student profiles and inspect profile, session, and history state boundaries.
+- [x] Make attendance sessions, history data, pending mutations, and display state profile-aware so one student’s records cannot remain visible after another profile is selected.
+- [x] Add automated profile-switching coverage for two distinct attendance owners and regression-test timetable and attendance controls.
+- [ ] Deploy and verify the profile-switching repair through the live web proxy without exposing personal attendance data.
+- [x] Run and document a deterministic two-profile web attendance reproduction that verifies the session, history, and visible record boundary before deployment.

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ATTENDANCE_SESSION_KEY, calculateAttendanceSummary, clampAttendanceTarget, createAttendanceClient, createLectureKey, createProfileFingerprint, readAttendanceTarget, saveAttendanceTarget } from "./attendance";
+import { ATTENDANCE_INSTALLATION_KEY, ATTENDANCE_PROFILE_SCOPE_KEY, ATTENDANCE_SESSION_KEY, calculateAttendanceSummary, clampAttendanceTarget, createAttendanceClient, createLectureKey, createProfileFingerprint, readAttendanceTarget, saveAttendanceTarget } from "./attendance";
 
 const profile = { studentName: "Student", crn: "2621101", registrationNumber: "202600011", fatherName: null, motherName: null, branch: "IT", section: "ITB", subsection: "ITB2", mentoringGroup: "ITBM2", mentorName: null, mentorMobileNumber: null, venue: null, source: "official" as const, sourceUrl: null, savedAt: 1 };
 
@@ -123,5 +123,32 @@ describe("attendance API client", () => {
       return new Response(JSON.stringify({ record: { attendance_date: "2026-08-24", lecture_key: "key", status: "present" } }), { status: 200 });
     }) });
     await expect(recordClient.saveRecord(profile, { attendanceDate: "2026-08-24", lectureKey: "key", status: "present", subject: "Math", teacher: "", venue: "", startMinutes: 600, endMinutes: 650 })).resolves.toMatchObject({ lecture_key: "key", status: "present" });
+  });
+
+  it("rotates the browser installation and never reuses records when switching between two saved profiles", async () => {
+    const storage = memoryStorage();
+    const friend = { ...profile, studentName: "Friend", crn: "2621102", registrationNumber: "202600012", subsection: "ITB1" };
+    const sessionBodies: Array<{ installationId: string; profileFingerprint: string }> = [];
+    const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === "/api/attendance/session") {
+        const body = JSON.parse(String(init?.body));
+        sessionBodies.push(body);
+        return new Response(JSON.stringify({ studentId: body.profileFingerprint.endsWith("a") ? "owner-a" : `owner-${sessionBodies.length}`, accessToken: `token-${sessionBodies.length}`, issuedAt: "2026-08-24T00:00:00Z" }), { status: 200 });
+      }
+      const authorization = String((init?.headers as Record<string, string> | undefined)?.Authorization ?? "");
+      return new Response(JSON.stringify({ from: "2026-08-01", to: "2026-08-24", records: [{ attendance_date: "2026-08-20", lecture_key: authorization.includes("token-2") ? "friend-record" : "student-record", status: "present" }] }), { status: 200 });
+    });
+    const client = createAttendanceClient({ storage, fetcher });
+    const first = await client.getHistory(profile, "2026-08-01", "2026-08-24", 75);
+    const second = await client.getHistory(friend, "2026-08-01", "2026-08-24", 75);
+    const third = await client.getHistory(profile, "2026-08-01", "2026-08-24", 75);
+
+    expect(first.records[0].lecture_key).toBe("student-record");
+    expect(second.records[0].lecture_key).toBe("friend-record");
+    expect(third.records[0].lecture_key).toBe("student-record");
+    expect(sessionBodies).toHaveLength(3);
+    expect(new Set(sessionBodies.map(body => body.installationId)).size).toBe(3);
+    expect(storage.getItem(ATTENDANCE_PROFILE_SCOPE_KEY)).toContain(profile.crn);
+    expect(storage.getItem(ATTENDANCE_INSTALLATION_KEY)).toBeTruthy();
   });
 });
