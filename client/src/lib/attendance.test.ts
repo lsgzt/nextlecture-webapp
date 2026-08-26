@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ATTENDANCE_INSTALLATION_KEY, ATTENDANCE_PROFILE_SCOPE_KEY, ATTENDANCE_SESSION_KEY, calculateAttendanceSummary, clampAttendanceTarget, createAttendanceClient, createLectureKey, createProfileFingerprint, readAttendanceTarget, saveAttendanceTarget } from "./attendance";
+import { ATTENDANCE_INSTALLATION_KEY, ATTENDANCE_PROFILE_SCOPE_KEY, ATTENDANCE_SESSION_KEY, calculateAttendanceSummary, clampAttendanceTarget, createAttendanceClient, createLectureKey, createProfileFingerprint, getAttendanceProfileScope, readAttendanceTarget, saveAttendanceTarget } from "./attendance";
 
 const profile = { studentName: "Student", crn: "2621101", registrationNumber: "202600011", fatherName: null, motherName: null, branch: "IT", section: "ITB", subsection: "ITB2", mentoringGroup: "ITBM2", mentorName: null, mentorMobileNumber: null, venue: null, source: "official" as const, sourceUrl: null, savedAt: 1 };
 
@@ -15,6 +15,11 @@ describe("attendance identity and local target", () => {
     expect(fingerprint).toBe(await createProfileFingerprint({ ...profile, mentoringGroup: "Changed" }));
     expect(fingerprint).not.toBe(await createProfileFingerprint({ ...profile, subsection: "ITB1" }));
     expect(fingerprint).not.toBe(await createProfileFingerprint({ ...profile, registrationNumber: "202600012" }));
+  });
+
+  it("uses CRN rather than registration number as the web profile-linking scope", () => {
+    expect(getAttendanceProfileScope(profile)).toBe(getAttendanceProfileScope({ ...profile, registrationNumber: "different-directory-value" }));
+    expect(getAttendanceProfileScope(profile)).not.toBe(getAttendanceProfileScope({ ...profile, crn: "2621199" }));
   });
 
   it("uses the Android-compatible date and timetable fields for lecture keys", async () => {

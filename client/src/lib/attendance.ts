@@ -37,9 +37,9 @@ export async function createProfileFingerprint(profile: StudentProfile) {
   return sha256LowercaseHex([normalize(profile.registrationNumber), normalize(profile.crn), normalize(profile.branch), normalize(profile.subsection), normalize(profile.studentName)].join("|"));
 }
 
-/** Stable local scope used to prevent one saved student's session or UI state being reused for another. */
+/** CRN-led local scope used to isolate browser state when the saved student changes. */
 export function getAttendanceProfileScope(profile: StudentProfile) {
-  return [normalize(profile.registrationNumber), normalize(profile.crn), normalize(profile.branch), normalize(profile.subsection), normalize(profile.studentName)].join("|");
+  return [normalize(profile.crn), normalize(profile.branch), normalize(profile.subsection), normalize(profile.studentName)].join("|");
 }
 
 export function getInstallationId(storage: StorageLike) {

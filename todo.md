@@ -99,3 +99,8 @@
 - [x] Deploy and verify the profile-switching repair through the live web proxy without exposing personal attendance data.
 - [x] Run and document a deterministic two-profile web attendance reproduction that verifies the session, history, and visible record boundary before deployment.
 - [x] Run and document a live token-safe two-profile owner-isolation smoke test through nextlecture.vercel.app, confirming no records cross between profile scopes.
+- [x] Use CRN as the web attendance linking and local-scope identifier, safely rotating affected local sessions while retaining the existing API-compatible fingerprint internally from the verified directory match.
+- [x] Add clear dashboard options to view tomorrow’s timetable and the full Monday-to-Friday timetable without weakening next-lecture prominence.
+- [x] Add tests for CRN attendance identity behavior and tomorrow/full-week timetable navigation, then regression-test existing features.
+- [ ] Deploy and verify the CRN identity and expanded timetable navigation update.
+- [x] Document and verify that CRN-based web linking needs no registration-number input while preserving the existing Android API’s internal compatible owner lookup.

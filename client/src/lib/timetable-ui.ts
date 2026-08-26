@@ -29,8 +29,18 @@ export function getMinutesNow(now = new Date()) {
 
 export function getTodayLectures(timetable: GroupTimetable | null, now = new Date()) {
   const day = getTodayName(now);
+  return getLecturesForDay(timetable, day);
+}
+
+export function getLecturesForDay(timetable: GroupTimetable | null, day: Weekday | null) {
   if (!day || !timetable) return [];
   return timetable.lectures.filter(lecture => lecture.day === day);
+}
+
+export function getTomorrowLectures(timetable: GroupTimetable | null, now = new Date()) {
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return getLecturesForDay(timetable, getTodayName(tomorrow));
 }
 
 export function lectureStatus(lecture: Lecture, now = new Date()) {

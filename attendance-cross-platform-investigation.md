@@ -20,13 +20,13 @@ The deployed API accepts session creation at `POST /api/attendance/session`, his
 
 The current web profile persists CRN but not registration number. Its attendance fingerprint begins with an empty registration component, so it cannot equal the Android owner fingerprint for the same student. This causes the API to create a second attendance owner, leaving Android-created records outside the web history. The web client also needs to normalize the API’s `{ record }` write envelope.
 
-## Planned web-only correction
+## CRN-based web linking
 
-The web profile will persist a registration-number compatibility field and allow a student to supply the same registration number used by Android. The attendance session will then use the Android-compatible fingerprint and preserve the saved subsection. Attendance controls will remain only on `/attendance`; the timetable dashboard will retain its existing View attendance link and return to a timetable-first layout.
+The web app now links attendance through the saved **CRN**: CRN, branch, subsection, and name define its local profile scope, session rotation, and the user-facing sync state. The attendance screen no longer asks students to enter a registration number. For profiles found in the verified directory, the existing server-compatible fingerprint is assembled internally with the directory’s verified registration value because the unchanged Android/API contract requires that opaque value to recover Android-created records. This preserves Android sync while making CRN the only attendance identity input or choice on web.
 
 ## Local UI verification
 
-With a test-only saved profile, the local `/app` dashboard showed the profile card, a single `View attendance` action, the next-lecture card, and the day schedule. It no longer rendered the expanded quick-mark attendance card or any present/absent/clear controls. The local `/attendance` route showed the Android-link registration-number field, the existing attendance summary, date picker, and backfill controls.
+With a test-only saved profile, the local `/app` dashboard showed the profile card, a single `View attendance` action, the next-lecture card, and the day schedule. It no longer rendered the expanded quick-mark attendance card or any present/absent/clear controls. The local `/attendance` route showed CRN-based Android sync status, the existing attendance summary, date picker, and backfill controls without a registration-number input.
 
 ## Production API compatibility smoke test
 
