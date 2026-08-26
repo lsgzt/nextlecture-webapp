@@ -105,6 +105,7 @@
 - [x] Deploy and verify the CRN identity and expanded timetable navigation update.
 - [x] Document and verify that CRN-based web linking needs no registration-number input while preserving the existing Android API’s internal compatible owner lookup.
 - [x] Verify the live dashboard after data settles, including the Today, Tomorrow, and Full week views with their timetable content.
-- [ ] Verify the live attendance page presents CRN-based linking without a registration-number input and retains server-backed sync behavior.
-- [ ] Document the completed production interface checks for the CRN and timetable navigation release.
-- [ ] Remove the remaining registration-number field and Android-link copy from manual profile setup, retaining only internal verified-directory compatibility behavior.
+- [x] Verify the live attendance page presents CRN-based linking without a registration-number input and retains server-backed sync behavior.
+- [x] Document the completed production interface checks for the CRN and timetable navigation release.
+- [x] Remove the remaining registration-number field and Android-link copy from manual profile setup, retaining only internal verified-directory compatibility behavior.
+- [x] Run and document a token-safe post-change attendance read, write, and cleanup through the deployed CRN-linked web flow.

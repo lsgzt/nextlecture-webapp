@@ -51,3 +51,19 @@ After the production timetable settled, the dashboard displayed the new **Today*
 Selecting **Full week** rendered the deployed Monday-to-Friday timetable, including each weekday’s lecture count and schedule. The production attendance route correctly showed the profile prerequisite in a clean browser without a saved student profile; the CRN-linked sync panel is intentionally shown only after a profile has been set up.
 
 The production ITB2 dashboard then settled with the official timetable, the profile setup entry point, and all three schedule controls available. A synthetic profile is used only for the following UI-surface check and is not connected to any real student attendance record.
+
+The final CRN-only manual-profile correction deployed in ready Vercel deployment `dpl_2jS1qn5SwYweGB5C6PgwRE6rZ7sh` for commit `05a46c7290fee34b86f1680412f851570c42d87c`. A refreshed production dashboard continued to show the official ITB2 timetable and all three schedule controls.
+
+In the live manual-profile form, a synthetic profile was accepted with a name, CRN, section, and subsection. The form requested **Class Roll Number (CRN)** and no longer displayed a registration-number field or Android-link wording.
+
+The saved synthetic profile opened the live attendance route, where the sync panel read **Linked by your CRN** and contained no registration-number input. Its unmatched synthetic CRN correctly produced a private empty attendance record, while the existing server-backed flow remains available for verified official profiles through the unchanged internal compatibility lookup.
+
+For the post-change synthetic mark check, the initial live page state remained empty after selecting a Present action; no success or failure message was yet visible in the rendered view. The verification therefore remains in progress until the asynchronous request and cleanup state are confirmed.
+
+After waiting for the request state, the rendered summary still showed no marks and the browser console contained no client-side error. The synthetic post-change mark behavior is being inspected further before this check is considered complete.
+
+The first browser-automation click did not await the asynchronous mutation. A controlled follow-up in the live page waited for completion and confirmed the enabled control changed to `aria-pressed=true` with the visible `Marked present` state and no alert. This verifies that the deployed CRN-linked attendance page completed the synthetic server-backed Present write; reload and cleanup are being verified next.
+
+After reloading the live attendance page, the synthetic record was read back as `1 present · 0 absent` with a 100% summary and `Marked present` on the correct lecture. This confirms the deployed CRN-linked flow performed a server-backed write and subsequent history read.
+
+The synthetic Clear request was followed by a fresh reload that returned to `No lectures marked yet`, confirming cleanup of the temporary record. The final live sequence therefore verified CRN-linked page UI, server-backed write, persisted history read, and record removal without using real student data or displaying a bearer token.
