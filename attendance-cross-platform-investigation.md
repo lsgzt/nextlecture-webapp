@@ -41,3 +41,13 @@ The live `nextlecture.vercel.app` proxy was also verified with generated identit
 ## Owner verification
 
 The account owner subsequently confirmed that the deployed web flow worked correctly with their own Android attendance records. No individual attendance details were accessed, displayed, or retained during that confirmation.
+
+## CRN-link deployment
+
+The CRN-linked web interface and expanded timetable navigation deployed to `nextlecture.vercel.app` in Vercel deployment `dpl_9Hq72WW6DtjwTxee6waJbhHZ26Pn`, which reached `READY` for commit `198b6acb28d881d51b9b8216645b883409c87500`. A production dashboard request loaded the current application shell and selected timetable group; timetable data continued to resolve through the existing official-first flow.
+
+After the production timetable settled, the dashboard displayed the new **Today**, **Tomorrow**, and **Full week** controls. Selecting **Tomorrow** showed the next calendar day’s date and its ITB2 lecture schedule through the live official-first timetable response.
+
+Selecting **Full week** rendered the deployed Monday-to-Friday timetable, including each weekday’s lecture count and schedule. The production attendance route correctly showed the profile prerequisite in a clean browser without a saved student profile; the CRN-linked sync panel is intentionally shown only after a profile has been set up.
+
+The production ITB2 dashboard then settled with the official timetable, the profile setup entry point, and all three schedule controls available. A synthetic profile is used only for the following UI-surface check and is not connected to any real student attendance record.
