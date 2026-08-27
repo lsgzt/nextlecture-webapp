@@ -1,15 +1,16 @@
 import { AlertCircle, ArrowLeft, CalendarDays, CheckCircle2, ClipboardCheck, Info, LoaderCircle, MapPin, Target, UserRound } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
-import type { AttendanceHistory, AttendanceRecord, AttendanceRecordInput, AttendanceStatus } from "@shared/attendance";
+import type { AttendanceHistory, AttendanceLeaderboard as AttendanceLeaderboardData, AttendanceLeaderboardScope, AttendanceRecord, AttendanceRecordInput, AttendanceStatus } from "@shared/attendance";
 import { BRAND_LOGO_URL } from "@shared/config";
 import type { StudentProfile } from "@shared/student-profile";
 import type { TimetableResponse, Weekday } from "@shared/timetable";
+import { AttendanceLeaderboard } from "@/components/AttendanceLeaderboard";
 import { AttendanceControls } from "@/components/AttendanceControls";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Calendar } from "@/components/ui/calendar";
 import { Slider } from "@/components/ui/slider";
-import { calculateAttendanceSummary, createAttendanceClient, formatLocalAttendanceDate, getAttendanceProfileScope, readAttendanceTarget, saveAttendanceTarget } from "@/lib/attendance";
+import { AttendanceApiError, DEFAULT_LEADERBOARD_SCOPE, calculateAttendanceSummary, createAttendanceClient, formatLocalAttendanceDate, getAttendanceProfileScope, readAttendanceTarget, saveAttendanceTarget, shouldApplyLeaderboardResponse } from "@/lib/attendance";
 import { readStoredStudentProfile, saveStudentProfile } from "@/lib/student-profile-storage";
 import { DAY_ORDER, formatRange } from "@/lib/timetable-ui";
 import { trpc } from "@/lib/trpc";
@@ -51,9 +52,16 @@ export default function AttendancePage() {
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [historyScope, setHistoryScope] = useState("");
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [leaderboardScope, setLeaderboardScope] = useState<AttendanceLeaderboardScope>(DEFAULT_LEADERBOARD_SCOPE);
+  const [leaderboard, setLeaderboard] = useState<AttendanceLeaderboardData | null>(null);
+  const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
+  const [isLoadingLeaderboard, setIsLoadingLeaderboard] = useState(false);
+  const [leaderboardRetryAt, setLeaderboardRetryAt] = useState(0);
+  const [isOnline, setIsOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
   const targetRef = useRef(target);
   const activeProfileScopeRef = useRef("");
   const historyRequestRef = useRef(0);
+  const leaderboardRequestRef = useRef(0);
   const client = useMemo(() => createAttendanceClient({ storage: localStorage }), []);
   const profileGroup = profile?.subsection.trim().toUpperCase() ?? "";
   const profileScope = profile ? getAttendanceProfileScope(profile) : "";
@@ -86,6 +94,12 @@ export default function AttendancePage() {
       setHistoryError(null);
       setIdentityMessage(null);
       setIsLoadingHistory(false);
+      leaderboardRequestRef.current += 1;
+      setLeaderboardScope(DEFAULT_LEADERBOARD_SCOPE);
+      setLeaderboard(null);
+      setLeaderboardError(null);
+      setIsLoadingLeaderboard(false);
+      setLeaderboardRetryAt(0);
     }
     window.addEventListener("focus", refreshSavedProfile);
     window.addEventListener("storage", refreshSavedProfile);
@@ -96,11 +110,27 @@ export default function AttendancePage() {
   }, []);
 
   useEffect(() => {
+    const updateNetworkState = () => setIsOnline(navigator.onLine);
+    window.addEventListener("online", updateNetworkState);
+    window.addEventListener("offline", updateNetworkState);
+    return () => {
+      window.removeEventListener("online", updateNetworkState);
+      window.removeEventListener("offline", updateNetworkState);
+    };
+  }, []);
+
+  useEffect(() => {
     historyRequestRef.current += 1;
     setHistory(null);
     setHistoryScope("");
     setHistoryError(null);
     setIsLoadingHistory(false);
+    leaderboardRequestRef.current += 1;
+    setLeaderboardScope(DEFAULT_LEADERBOARD_SCOPE);
+    setLeaderboard(null);
+    setLeaderboardError(null);
+    setIsLoadingLeaderboard(false);
+    setLeaderboardRetryAt(0);
   }, [profileScope]);
 
   useEffect(() => {
@@ -111,6 +141,8 @@ export default function AttendancePage() {
     client.resetStoredIdentity();
     setProfile(updated);
     setHistory(null);
+    leaderboardRequestRef.current += 1;
+    setLeaderboard(null);
     setIdentityMessage("Your CRN was matched to the verified student directory. Loading your shared Android attendance history now.");
   }, [androidIdentityQuery.data?.registrationNumber, client, profile]);
 
@@ -134,6 +166,48 @@ export default function AttendancePage() {
   }, [attendanceIdentityReady, bounds.from, bounds.to, client, profile, profileScope]);
 
   useEffect(() => { void loadHistory(); }, [loadHistory]);
+
+  const loadLeaderboard = useCallback(async () => {
+    if (!profile || !attendanceIdentityReady || !isOnline) return;
+    const requestScope = profileScope;
+    const requestId = ++leaderboardRequestRef.current;
+    setIsLoadingLeaderboard(true);
+    setLeaderboard(null);
+    setLeaderboardError(null);
+    try {
+      const response = await client.getLeaderboard(profile, leaderboardScope);
+      if (!shouldApplyLeaderboardResponse(requestId, leaderboardRequestRef.current, requestScope, activeProfileScopeRef.current)) return;
+      setLeaderboard(response);
+    } catch (reason) {
+      if (!shouldApplyLeaderboardResponse(requestId, leaderboardRequestRef.current, requestScope, activeProfileScopeRef.current)) return;
+      if (reason instanceof AttendanceApiError && reason.status === 400 && leaderboardScope !== DEFAULT_LEADERBOARD_SCOPE) {
+        setLeaderboardScope(DEFAULT_LEADERBOARD_SCOPE);
+        setLeaderboardError("That leaderboard view is unavailable. Showing your subsection instead.");
+      } else if (reason instanceof AttendanceApiError && reason.status === 429) {
+        setLeaderboardRetryAt(Date.now() + 5000);
+        setLeaderboardError("Leaderboard requests are busy right now. Please wait a moment before retrying.");
+      } else if (reason instanceof AttendanceApiError && reason.status === 503) {
+        setLeaderboardError("The leaderboard is temporarily unavailable. Your private attendance tracker remains available.");
+      } else {
+        setLeaderboardError("The leaderboard could not be loaded. Please try again.");
+      }
+    } finally {
+      if (shouldApplyLeaderboardResponse(requestId, leaderboardRequestRef.current, requestScope, activeProfileScopeRef.current)) setIsLoadingLeaderboard(false);
+    }
+  }, [attendanceIdentityReady, client, isOnline, leaderboardScope, profile, profileScope]);
+
+  useEffect(() => { void loadLeaderboard(); }, [loadLeaderboard]);
+
+  useEffect(() => {
+    if (!leaderboardRetryAt) return;
+    const remaining = leaderboardRetryAt - Date.now();
+    if (remaining <= 0) {
+      setLeaderboardRetryAt(0);
+      return;
+    }
+    const timer = window.setTimeout(() => setLeaderboardRetryAt(0), remaining);
+    return () => window.clearTimeout(timer);
+  }, [leaderboardRetryAt]);
 
   const visibleHistory = historyScope === profileScope ? history : null;
   const recordsByKey = useMemo(() => Object.fromEntries((visibleHistory?.records ?? []).map(record => [record.lecture_key, record.status])) as Record<string, AttendanceStatus>, [visibleHistory]);
@@ -160,6 +234,7 @@ export default function AttendancePage() {
       const withoutCurrent = records.filter(item => item.lecture_key !== record.lectureKey);
       return { from: current?.from ?? bounds.from, to: current?.to ?? bounds.to, records: status ? [...withoutCurrent, localRecordFromInput({ ...record, status })] : withoutCurrent, summary: current?.summary ?? summary };
     });
+    void loadLeaderboard();
   }
 
   return <div className="min-h-screen bg-[#f7f8f6] text-foreground dark:bg-[#101917]">
@@ -177,6 +252,17 @@ export default function AttendancePage() {
 
           <aside className="rounded-3xl border border-border bg-card p-4 shadow-sm"><div className="flex items-center gap-3 px-1"><span className="grid h-9 w-9 place-items-center rounded-xl bg-teal-50 text-teal-700 dark:bg-teal-950/45 dark:text-teal-300"><CalendarDays className="h-4 w-4" /></span><div><p className="font-display text-xl font-semibold tracking-[-0.04em]">Choose a date</p><p className="text-sm text-muted-foreground">Today or any prior day</p></div></div><Calendar mode="single" selected={selectedDate} onSelect={date => date && setSelectedDate(date)} disabled={{ after: new Date(`${today}T23:59:59`) }} fromDate={new Date(`${bounds.from}T12:00:00`)} toDate={new Date(`${today}T12:00:00`)} className="mx-auto mt-3" /></aside>
         </div>
+
+        <AttendanceLeaderboard
+          scope={leaderboardScope}
+          onScopeChange={scope => { if (scope !== leaderboardScope) setLeaderboardScope(scope); }}
+          leaderboard={leaderboard}
+          loading={isLoadingLeaderboard}
+          error={leaderboardError}
+          retryBlocked={Boolean(leaderboardRetryAt)}
+          online={isOnline}
+          onRetry={() => void loadLeaderboard()}
+        />
 
         <section className="mt-5 rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-7"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="eyebrow"><CalendarDays className="h-3.5 w-3.5" /> TIMETABLE BACKFILL</p><h2 className="mt-2 font-display text-2xl font-semibold tracking-[-0.045em]">{selectedDate.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</h2></div><span className="inline-flex w-fit items-center gap-2 rounded-full bg-teal-50 px-3 py-1.5 text-xs font-bold text-teal-800 dark:bg-teal-950/45 dark:text-teal-200"><Info className="h-3.5 w-3.5" /> Manual correction is always available</span></div><div className="mt-5 flex gap-2 overflow-x-auto pb-1">{dateStrip.map(date => { const key = formatLocalAttendanceDate(date); const selected = key === selectedDateKey; return <button key={key} type="button" onClick={() => setSelectedDate(date)} className={`min-w-15 rounded-xl border px-3 py-2 text-center transition ${selected ? "border-teal-700 bg-teal-700 text-white" : "border-border bg-background hover:border-teal-300"}`}><span className="block text-[0.65rem] font-bold uppercase tracking-wide opacity-80">{date.toLocaleDateString(undefined, { weekday: "short" })}</span><span className="mt-0.5 block text-lg font-bold">{date.getDate()}</span></button>; })}</div>
           {!timetable && <div className="mt-6 rounded-2xl bg-muted/55 px-5 py-8 text-center"><AlertCircle className="mx-auto h-5 w-5 text-muted-foreground" /><p className="mt-3 font-semibold">Your timetable is not available yet.</p><p className="mt-1 text-sm leading-6 text-muted-foreground">Open the timetable once while online to load the saved {profileGroup} schedule for attendance backfill.</p><Link href="/app" className="mt-4 inline-flex text-sm font-bold text-teal-700 underline underline-offset-4 dark:text-teal-300">Open timetable</Link></div>}

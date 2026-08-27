@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import { createAttendanceProxyHandler, isAllowedAttendanceRoute } from "./attendanceProxy";
 
 describe("attendance proxy route allowlist", () => {
-  it("forwards only documented session, history, upsert, and delete operations", () => {
+  it("forwards only documented session, history, leaderboard, upsert, and delete operations", () => {
     expect(isAllowedAttendanceRoute("POST", "/session")).toBe(true);
     expect(isAllowedAttendanceRoute("GET", "/")).toBe(true);
+    expect(isAllowedAttendanceRoute("GET", "/leaderboard")).toBe(true);
     expect(isAllowedAttendanceRoute("POST", "/records")).toBe(true);
     expect(isAllowedAttendanceRoute("DELETE", "/records")).toBe(true);
     expect(isAllowedAttendanceRoute("GET", "/admin")).toBe(false);
@@ -18,6 +19,29 @@ describe("attendance proxy route allowlist", () => {
       json() { return response; },
     };
     await handler({ method: "GET", originalUrl: "/api/attendance?from=2026-08-01&to=2026-08-24&target=75&extra=1", get: () => undefined } as never, response as never);
+    expect(statusCode).toBe(400);
+  });
+
+  it("forwards only a valid fixed leaderboard scope and rejects free-form values", async () => {
+    let forwardedUrl = "";
+    const handler = createAttendanceProxyHandler({
+      apiBase: "https://attendance.example",
+      fetcher: async url => {
+        forwardedUrl = String(url);
+        return new Response(JSON.stringify({ rows: [] }), { status: 200 });
+      },
+    });
+    let statusCode = 200;
+    const response = {
+      status(code: number) { statusCode = code; return response; },
+      setHeader() { return response; },
+      send() { return response; },
+      json() { return response; },
+    };
+    await handler({ method: "GET", originalUrl: "/api/attendance/leaderboard?scope=branch", get: () => "Bearer opaque-session" } as never, response as never);
+    expect(statusCode).toBe(200);
+    expect(forwardedUrl).toBe("https://attendance.example/api/attendance/leaderboard?scope=branch");
+    await handler({ method: "GET", originalUrl: "/api/attendance/leaderboard?scope=subsection&value=other", get: () => undefined } as never, response as never);
     expect(statusCode).toBe(400);
   });
 

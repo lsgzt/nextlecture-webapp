@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 
-const ALLOWED_ROUTES = new Set(["POST /session", "GET /", "POST /records", "DELETE /records"]);
+const ALLOWED_ROUTES = new Set(["POST /session", "GET /", "GET /leaderboard", "POST /records", "DELETE /records"]);
 
 type AttendanceProxyOptions = {
   apiBase?: string;
@@ -30,6 +30,11 @@ function hasValidAttendanceQuery(method: string, relativePath: string, url: URL)
     const date = url.searchParams.get("date");
     const lectureKey = url.searchParams.get("lectureKey");
     return hasOnlyQueryParameters(url, ["date", "lectureKey"]) && Boolean(date?.match(/^\d{4}-\d{2}-\d{2}$/)) && Boolean(lectureKey?.match(/^[a-f0-9]{64}$/));
+  }
+  if (method === "GET" && relativePath === "/leaderboard") {
+    const scope = url.searchParams.get("scope");
+    const entries = Array.from(url.searchParams.entries());
+    return entries.length === 1 && scope !== null && ["subsection", "section", "branch", "all"].includes(scope);
   }
   return url.search === "";
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ATTENDANCE_INSTALLATION_KEY, ATTENDANCE_PROFILE_SCOPE_KEY, ATTENDANCE_SESSION_KEY, calculateAttendanceSummary, clampAttendanceTarget, createAttendanceClient, createLectureKey, createProfileFingerprint, getAttendanceProfileScope, readAttendanceTarget, saveAttendanceTarget } from "./attendance";
+import { ATTENDANCE_INSTALLATION_KEY, ATTENDANCE_PROFILE_SCOPE_KEY, ATTENDANCE_SESSION_KEY, DEFAULT_LEADERBOARD_SCOPE, calculateAttendanceSummary, clampAttendanceTarget, createAttendanceClient, createLectureKey, createProfileFingerprint, getAttendanceProfileScope, normalizeAttendanceLeaderboard, readAttendanceTarget, saveAttendanceTarget, shouldApplyLeaderboardResponse } from "./attendance";
 
 const profile = { studentName: "Student", crn: "2621101", registrationNumber: "202600011", fatherName: null, motherName: null, branch: "IT", section: "ITB", subsection: "ITB2", mentoringGroup: "ITBM2", mentorName: null, mentorMobileNumber: null, venue: null, source: "official" as const, sourceUrl: null, savedAt: 1 };
 
@@ -44,6 +44,28 @@ describe("attendance identity and local target", () => {
     ], 75);
     expect(summary).toMatchObject({ present: 2, absent: 1, markedTotal: 3, percentage: 66.7, affordableMisses: 0, lecturesToAttend: 1 });
   });
+
+  it("sanitizes unknown leaderboard fields, omits empty participants, and keeps a missing personal summary nullable", () => {
+    const leaderboard = normalizeAttendanceLeaderboard({
+      scope: "section",
+      scopeLabel: "Section: ITB",
+      participants: 2,
+      rows: [
+        { rank: 1, name: " Student ", percentage: 99.94, markedTotal: 8, currentStreak: 3, present: 8, absent: 0, privateField: "ignored" },
+        { rank: 2, name: "", percentage: 100, markedTotal: 1, currentStreak: 1 },
+        { rank: 3, name: "No marks", percentage: 100, markedTotal: 0, currentStreak: 1 },
+      ],
+      me: null,
+    });
+    expect(leaderboard).toEqual({ scope: "section", scopeLabel: "Section: ITB", participants: 2, rows: [{ rank: 1, name: "Student", percentage: 99.9, markedTotal: 8, currentStreak: 3 }], me: null });
+    expect(normalizeAttendanceLeaderboard({ rows: [], me: null })).toMatchObject({ scope: "subsection", participants: 0, rows: [], me: null });
+  });
+
+  it("rejects stale leaderboard state updates when the active student profile changes", () => {
+    expect(shouldApplyLeaderboardResponse(4, 4, "student-a", "student-a")).toBe(true);
+    expect(shouldApplyLeaderboardResponse(4, 5, "student-a", "student-b")).toBe(false);
+    expect(shouldApplyLeaderboardResponse(4, 4, "student-a", "student-b")).toBe(false);
+  });
 });
 
 describe("attendance API client", () => {
@@ -60,6 +82,40 @@ describe("attendance API client", () => {
     await client.saveRecord(profile, { attendanceDate: "2026-08-24", lectureKey: "key", status: "present", subject: "Math", teacher: "", venue: "", startMinutes: 600, endMinutes: 650 });
     expect(storage.getItem(ATTENDANCE_SESSION_KEY)).toContain("opaque-b");
     expect(fetcher).toHaveBeenCalledTimes(4);
+  });
+
+  it("defaults leaderboard requests to the saved subsection and refreshes the existing session once after a 401", async () => {
+    const storage = memoryStorage({ "nextlecture:attendance:installation:v1": "installation-for-tests" });
+    const responses = [
+      new Response(JSON.stringify({ studentId: "owner-a", accessToken: "opaque-a", issuedAt: "2026-08-24T00:00:00Z" }), { status: 200 }),
+      new Response(JSON.stringify({ error: "expired" }), { status: 401 }),
+      new Response(JSON.stringify({ studentId: "owner-a", accessToken: "opaque-b", issuedAt: "2026-08-24T00:01:00Z" }), { status: 200 }),
+      new Response(JSON.stringify({ scope: "subsection", scopeLabel: "Subsection: ITB2", participants: 1, rows: [{ rank: 1, name: "Student", percentage: 100, markedTotal: 1, currentStreak: 1 }], me: null }), { status: 200 }),
+    ];
+    const fetcher = vi.fn(async () => responses.shift()!);
+    const client = createAttendanceClient({ storage, fetcher });
+    const result = await client.getLeaderboard(profile);
+    expect(DEFAULT_LEADERBOARD_SCOPE).toBe("subsection");
+    expect(fetcher.mock.calls.map(call => call[0])).toEqual(["/api/attendance/session", "/api/attendance/leaderboard?scope=subsection", "/api/attendance/session", "/api/attendance/leaderboard?scope=subsection"]);
+    expect(result.rows[0]).toMatchObject({ name: "Student", currentStreak: 1 });
+  });
+
+  it("uses a requested leaderboard scope, surfaces rate limits, and does not reuse the prior profile session", async () => {
+    const storage = memoryStorage({ "nextlecture:attendance:installation:v1": "installation-for-tests" });
+    const friend = { ...profile, studentName: "Friend", crn: "2621102", registrationNumber: "202600012", subsection: "ITB1" };
+    const calls: Array<{ url: string; authorization: string }> = [];
+    const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push({ url, authorization: String((init?.headers as Record<string, string> | undefined)?.Authorization ?? "") });
+      if (url === "/api/attendance/session") return new Response(JSON.stringify({ studentId: "owner", accessToken: `opaque-${calls.filter(call => call.url.endsWith("/session")).length}`, issuedAt: "2026-08-24T00:00:00Z" }), { status: 200 });
+      if (url.endsWith("scope=branch")) return new Response(JSON.stringify({ error: "slow down" }), { status: 429 });
+      return new Response(JSON.stringify({ scope: "all", participants: 1, rows: [{ rank: 1, name: "Friend", percentage: 90, markedTotal: 10, currentStreak: 2 }] }), { status: 200 });
+    });
+    const client = createAttendanceClient({ storage, fetcher });
+    await expect(client.getLeaderboard(profile, "branch")).rejects.toMatchObject({ status: 429 });
+    await client.getLeaderboard(friend, "all");
+    expect(calls.filter(call => call.url === "/api/attendance/session")).toHaveLength(2);
+    expect(calls[calls.length - 1]?.url).toBe("/api/attendance/leaderboard?scope=all");
+    expect(calls.find(call => call.url.endsWith("scope=all"))?.authorization).toContain("opaque-2");
   });
 
   it("does not reuse a stored token when the profile fingerprint changes", async () => {

@@ -36,6 +36,30 @@ export type AttendanceSession = {
   issuedAt: string;
 };
 
+export const ATTENDANCE_LEADERBOARD_SCOPES = ["subsection", "section", "branch", "all"] as const;
+
+export type AttendanceLeaderboardScope = (typeof ATTENDANCE_LEADERBOARD_SCOPES)[number];
+
+/**
+ * This intentionally contains only presentation-safe leaderboard fields.
+ * Attendance records, tokens, fingerprints, CRNs, and registration numbers never enter the UI model.
+ */
+export type AttendanceLeaderboardEntry = {
+  rank: number;
+  name: string;
+  percentage: number;
+  markedTotal: number;
+  currentStreak: number;
+};
+
+export type AttendanceLeaderboard = {
+  scope: AttendanceLeaderboardScope;
+  scopeLabel: string;
+  participants: number;
+  rows: AttendanceLeaderboardEntry[];
+  me: AttendanceLeaderboardEntry | null;
+};
+
 export type AttendanceRecordInput = {
   attendanceDate: string;
   lectureKey: string;

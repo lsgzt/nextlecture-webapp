@@ -1631,7 +1631,7 @@ Question: ${question}` }] }
 }
 
 // server/attendanceProxy.ts
-var ALLOWED_ROUTES = /* @__PURE__ */ new Set(["POST /session", "GET /", "POST /records", "DELETE /records"]);
+var ALLOWED_ROUTES = /* @__PURE__ */ new Set(["POST /session", "GET /", "GET /leaderboard", "POST /records", "DELETE /records"]);
 function getAttendanceApiBase() {
   return process.env.ATTENDANCE_API_BASE?.trim().replace(/\/$/, "") || null;
 }
@@ -1652,6 +1652,11 @@ function hasValidAttendanceQuery(method, relativePath, url) {
     const date = url.searchParams.get("date");
     const lectureKey = url.searchParams.get("lectureKey");
     return hasOnlyQueryParameters(url, ["date", "lectureKey"]) && Boolean(date?.match(/^\d{4}-\d{2}-\d{2}$/)) && Boolean(lectureKey?.match(/^[a-f0-9]{64}$/));
+  }
+  if (method === "GET" && relativePath === "/leaderboard") {
+    const scope = url.searchParams.get("scope");
+    const entries = Array.from(url.searchParams.entries());
+    return entries.length === 1 && scope !== null && ["subsection", "section", "branch", "all"].includes(scope);
   }
   return url.search === "";
 }

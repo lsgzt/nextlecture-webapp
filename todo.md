@@ -109,3 +109,6 @@
 - [x] Document the completed production interface checks for the CRN and timetable navigation release.
 - [x] Remove the remaining registration-number field and Android-link copy from manual profile setup, retaining only internal verified-directory compatibility behavior.
 - [x] Run and document a token-safe post-change attendance read, write, and cleanup through the deployed CRN-linked web flow.
+- [x] Add a profile-isolated attendance streak and leaderboard that reuses the existing attendance session and server proxy, without changing the database or external attendance API.
+- [x] Add automated coverage for leaderboard parsing, scope changes, empty states, retry behavior, rate limiting, and profile-change clearing.
+- [ ] Verify and document the deployed leaderboard with synthetic, token-safe test data, then clean up any temporary record.

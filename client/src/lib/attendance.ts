@@ -1,11 +1,12 @@
 import type { Lecture } from "@shared/timetable";
 import type { StudentProfile } from "@shared/student-profile";
-import type { AttendanceHistory, AttendanceRecord, AttendanceRecordInput, AttendanceSession, AttendanceStatus, AttendanceSummary } from "@shared/attendance";
+import { ATTENDANCE_LEADERBOARD_SCOPES, type AttendanceHistory, type AttendanceLeaderboard, type AttendanceLeaderboardEntry, type AttendanceLeaderboardScope, type AttendanceRecord, type AttendanceRecordInput, type AttendanceSession, type AttendanceStatus, type AttendanceSummary } from "@shared/attendance";
 
 export const ATTENDANCE_INSTALLATION_KEY = "nextlecture:attendance:installation:v1";
 export const ATTENDANCE_SESSION_KEY = "nextlecture:attendance:session:v1";
 export const ATTENDANCE_PROFILE_SCOPE_KEY = "nextlecture:attendance:profile-scope:v1";
 export const ATTENDANCE_TARGET_KEY = "nextlecture:attendance:target:v1";
+export const DEFAULT_LEADERBOARD_SCOPE: AttendanceLeaderboardScope = "subsection";
 
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 type FetchLike = typeof fetch;
@@ -21,6 +22,53 @@ export class AttendanceApiError extends Error {
 
 function normalize(value: string | null | undefined) {
   return value?.trim() ?? "";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function nonNegativeInteger(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
+}
+
+function leaderboardPercentage(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? Math.min(100, Math.max(0, Math.round(value * 10) / 10)) : 0;
+}
+
+export function isAttendanceLeaderboardScope(value: unknown): value is AttendanceLeaderboardScope {
+  return typeof value === "string" && (ATTENDANCE_LEADERBOARD_SCOPES as readonly string[]).includes(value);
+}
+
+export function shouldApplyLeaderboardResponse(requestId: number, activeRequestId: number, requestProfileScope: string, activeProfileScope: string) {
+  return requestId === activeRequestId && requestProfileScope === activeProfileScope;
+}
+
+function sanitizeLeaderboardEntry(value: unknown): AttendanceLeaderboardEntry | null {
+  if (!isRecord(value)) return null;
+  const name = typeof value.name === "string" ? value.name.trim() : "";
+  if (!name) return null;
+  return {
+    rank: Math.max(1, nonNegativeInteger(value.rank)),
+    name,
+    percentage: leaderboardPercentage(value.percentage),
+    markedTotal: nonNegativeInteger(value.markedTotal),
+    currentStreak: nonNegativeInteger(value.currentStreak),
+  };
+}
+
+/** Removes unknown and non-display-safe API fields before leaderboard data reaches React state. */
+export function normalizeAttendanceLeaderboard(value: unknown, fallbackScope: AttendanceLeaderboardScope = DEFAULT_LEADERBOARD_SCOPE): AttendanceLeaderboard {
+  const payload = isRecord(value) ? value : {};
+  const rows = Array.isArray(payload.rows) ? payload.rows.map(sanitizeLeaderboardEntry).filter((row): row is AttendanceLeaderboardEntry => Boolean(row && row.markedTotal > 0)) : [];
+  const me = sanitizeLeaderboardEntry(payload.me);
+  return {
+    scope: isAttendanceLeaderboardScope(payload.scope) ? payload.scope : fallbackScope,
+    scopeLabel: typeof payload.scopeLabel === "string" && payload.scopeLabel.trim() ? payload.scopeLabel.trim() : `${fallbackScope[0].toUpperCase()}${fallbackScope.slice(1)} leaderboard`,
+    participants: Math.max(rows.length, nonNegativeInteger(payload.participants)),
+    rows,
+    me: me && me.markedTotal > 0 ? me : null,
+  };
 }
 
 function bytesToHex(bytes: Uint8Array) {
@@ -159,6 +207,8 @@ export function createAttendanceClient({ storage, fetcher = fetch }: { storage: 
         branch: normalize(profile.branch),
         subsection: normalize(profile.subsection),
         timetableGroup: normalize(profile.subsection),
+        displayName: normalize(profile.studentName),
+        section: normalize(profile.section),
       }),
     });
     if (!response.ok) throw new AttendanceApiError(response.status, await responseMessage(response));
@@ -202,6 +252,10 @@ export function createAttendanceClient({ storage, fetcher = fetch }: { storage: 
   return {
     async getHistory(profile: StudentProfile, from: string, to: string, target: number) {
       return authenticatedRequest<AttendanceHistory>(profile, `?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&target=${clampAttendanceTarget(target)}`, { method: "GET" });
+    },
+    async getLeaderboard(profile: StudentProfile, scope: AttendanceLeaderboardScope = DEFAULT_LEADERBOARD_SCOPE) {
+      const response = await authenticatedRequest<unknown>(profile, `/leaderboard?scope=${encodeURIComponent(scope)}`, { method: "GET" });
+      return normalizeAttendanceLeaderboard(response, scope);
     },
     async saveRecord(profile: StudentProfile, record: AttendanceRecordInput) {
       const response = await authenticatedRequest<AttendanceRecord | { record?: AttendanceRecord }>(profile, "/records", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(record) });
