@@ -2,6 +2,7 @@ import { ANDROID_APP_URL, BRAND_LOGO_URL } from "@shared/config";
 import { ArrowRight, BellRing, BookOpenCheck, CalendarDays, ChevronDown, CircleCheck, ExternalLink, FileText, MapPin, Moon, Sparkles, Sun, UsersRound } from "lucide-react";
 import { Link } from "wouter";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 
 const problemSteps = ["Find department", "Find branch", "Find section", "Find the right day", "Find the time and room"];
 
@@ -31,6 +32,7 @@ export default function Home() {
       </header>
 
       <main>
+        <div className="container pt-5"><AnnouncementBanner /></div>
         <section className="hero-grid">
           <div className="container grid items-center gap-12 py-15 sm:py-20 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16 lg:py-26">
             <div className="relative z-10 max-w-2xl">
