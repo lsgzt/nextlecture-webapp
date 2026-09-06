@@ -23,7 +23,8 @@ type TemporarySectionFetchResult = {
 };
 
 const REQUEST_TIMEOUT_MS = 25_000;
-const CACHE_PREFIX = "official-gnedc-permanent-section-2026-v1";
+/** Bumped when official PDF column layout changed (Registration No. added). */
+const CACHE_PREFIX = "official-gnedc-permanent-section-2026-v2";
 const PDF_RANGE_CHUNK_BYTES = 128 * 1024;
 const PDF_RANGE_CONCURRENCY = 8;
 const PDF_RANGE_TIMEOUT_MS = 25_000;
@@ -31,7 +32,25 @@ const PDF_RANGE_RETRIES = 2;
 const MAX_OFFICIAL_PDF_BYTES = 4 * 1024 * 1024;
 const inMemoryCache = new Map<TemporarySectionBranch, TemporarySectionCacheEnvelope>();
 const inFlightRefresh = new Map<TemporarySectionBranch, Promise<TemporarySectionCacheEnvelope>>();
-const PERMANENT_SECTION_COLUMN_STARTS = [0, 45, 82, 185, 295, 395, 435, 475, 525, 565, 675, 720];
+
+/**
+ * Column x-starts for the revised 2026 permanent-section PDFs (13 columns):
+ * S.No. | College Roll No. (CRN) | Registration No. | Student Name | Father Name |
+ * Mother Name | Branch | Section | Subsection | Mentoring Group | Mentor Name |
+ * Mentor's Mobile No. | Venue
+ */
+const PERMANENT_SECTION_COLUMN_STARTS = [0, 40, 75, 115, 220, 320, 415, 450, 485, 530, 580, 675, 730];
+
+/** Canonical official PDF URLs for August 2026 permanent sections (preferred over page discovery). */
+const BRANCH_DOCUMENT_URLS: Record<TemporarySectionBranch, string> = {
+  CE: "https://appsc.gndec.ac.in/sites/default/files/2026-08/CE%20Permanent%20Sections%202026_0.pdf",
+  CS: "https://appsc.gndec.ac.in/sites/default/files/2026-08/CS%20Permanent%20Sections%202026_0.pdf",
+  EC: "https://appsc.gndec.ac.in/sites/default/files/2026-08/EC%20Permanent%20Sections%202026_1.pdf",
+  EE: "https://appsc.gndec.ac.in/sites/default/files/2026-08/EE%20Permanent%20Sections%202026_0.pdf",
+  IT: "https://appsc.gndec.ac.in/sites/default/files/2026-08/IT%20Permanent%20Sections%202026_0.pdf",
+  ME: "https://appsc.gndec.ac.in/sites/default/files/2026-08/ME%20Permanent%20Sections%202026_0.pdf",
+  RAI: "https://appsc.gndec.ac.in/sites/default/files/2026-08/RAI%20Permanent%20Sections%202026_1.pdf",
+};
 
 type PdfTextItem = { str?: string; transform?: number[] };
 type PdfTextContent = { items: PdfTextItem[] };
@@ -66,15 +85,35 @@ function isValidEnvelope(value: unknown): value is TemporarySectionCacheEnvelope
 
 /**
  * Parses column-delimited text reconstructed from the source's revised 2026 permanent-section tables.
- * The document serial number is deliberately discarded: CRN is the official roll number.
+ * Layout: S.No., CRN, Registration No., Student Name, Father, Mother, Branch, Section, Subsection,
+ * Mentoring Group, Mentor Name, Mobile, Venue. Serial number is discarded; CRN is the roll number.
+ * Registration number is captured so it is not incorrectly prepended to the student name.
  */
 export function parseTemporarySectionText(text: string, expectedBranch: TemporarySectionBranch, sourceUrl: string) {
   const students: StudentProfile[] = [];
   for (const rawLine of text.split(/\r?\n/)) {
     const columns = rawLine.split("\t").map(normalizeText);
-    if (columns.length < 12) continue;
-    const [, crn, studentName, fatherName, motherName, branch, section, subsection, mentoringGroup, mentorName, mentorMobileNumber, venue] = columns;
+    if (columns.length < 13) continue;
+
+    const [
+      ,
+      crn,
+      registrationNumber,
+      studentName,
+      fatherName,
+      motherName,
+      branch,
+      section,
+      subsection,
+      mentoringGroup,
+      mentorName,
+      mentorMobileNumber,
+      venue,
+    ] = columns;
+
     if (!/^\d{6,16}$/.test(crn) || !studentName || !branch || !section || !subsection) continue;
+    // Reject rows where registration leaked into the name field (old parser / wrong columns).
+    if (/^\d{6,16}\s/.test(studentName) || /^\d{6,16}$/.test(studentName)) continue;
 
     const recordBranch = branch.toUpperCase();
     if (recordBranch !== expectedBranch) continue;
@@ -82,6 +121,7 @@ export function parseTemporarySectionText(text: string, expectedBranch: Temporar
     students.push({
       studentName,
       crn,
+      registrationNumber: /^\d{6,16}$/.test(registrationNumber) ? registrationNumber : null,
       fatherName: fatherName || null,
       motherName: motherName || null,
       branch: recordBranch,
@@ -128,6 +168,10 @@ export function findBranchDocumentUrl(html: string, branch: TemporarySectionBran
 }
 
 async function discoverBranchDocument(branch: TemporarySectionBranch) {
+  // Prefer the known current official URLs so filename suffixes (_0 / _1) stay correct.
+  const known = BRANCH_DOCUMENT_URLS[branch];
+  if (known) return known;
+
   const response = await fetch(TEMPORARY_SECTION_SOURCE_PAGE_URL, {
     headers: { Accept: "text/html,application/xhtml+xml", "User-Agent": "NextLecture/1.0 (GNDEC profile companion)" },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),

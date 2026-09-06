@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StudentProfile } from "@shared/student-profile";
-import { getStudentProfileDetailFields, getStudentProfileSubtitle } from "./student-profile-display";
+import { getCollegeEmail, getStudentProfileDetailFields, getStudentProfileSubtitle } from "./student-profile-display";
 
 const profile: StudentProfile = {
   studentName: "Lovepreet Singh",
@@ -25,11 +25,17 @@ describe("student profile display helpers", () => {
     expect(getStudentProfileSubtitle({ ...profile, source: "manual" })).toBe("CRN 2621101 · ITB2 · Manual profile");
   });
 
+  it("builds the college email from first name + CRN", () => {
+    expect(getCollegeEmail(profile)).toBe("lovepreet2621101@gndec.ac.in");
+    expect(getCollegeEmail({ studentName: "Aaditya Koundal", crn: "2621001" })).toBe("aaditya2621001@gndec.ac.in");
+  });
+
   it("returns the full official information only for the expanded profile section", () => {
     const details = getStudentProfileDetailFields(profile);
     expect(details).toContainEqual({ label: "Mentor mobile", value: "8968801937" });
     expect(details).toContainEqual({ label: "Registration number", value: null });
+    expect(details).toContainEqual({ label: "Mail", value: "lovepreet2621101@gndec.ac.in" });
     expect(details.map(detail => detail.label)).not.toContain("Serial number");
-    expect(details).toHaveLength(11);
+    expect(details).toHaveLength(12);
   });
 });
