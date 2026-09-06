@@ -25,7 +25,7 @@ export function normalizeAnnouncements(payload: unknown): Announcement[] {
   const list = (payload as AnnouncementsPayload).announcements;
   if (!Array.isArray(list) || list.length === 0) return [];
 
-  return list
+  const active = list
     .filter((item): item is Announcement => {
       if (!item || typeof item !== "object") return false;
       const row = item as Partial<Announcement>;
@@ -37,4 +37,7 @@ export function normalizeAnnouncements(payload: unknown): Announcement[] {
       const right = Date.parse(b.publishedAt) || 0;
       return right - left;
     });
+
+  // Web only surfaces the single newest active announcement (not the full history).
+  return active.slice(0, 1);
 }

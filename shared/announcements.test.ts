@@ -8,7 +8,7 @@ describe("normalizeAnnouncements", () => {
     expect(normalizeAnnouncements(null)).toEqual([]);
   });
 
-  it("keeps only active entries with required fields and sorts newest first", () => {
+  it("keeps only the newest active announcement", () => {
     const result = normalizeAnnouncements({
       version: 1,
       announcements: [
@@ -35,6 +35,6 @@ describe("normalizeAnnouncements", () => {
         },
       ],
     });
-    expect(result.map(item => item.id)).toEqual(["new", "old"]);
+    expect(result.map(item => item.id)).toEqual(["new"]);
   });
 });
