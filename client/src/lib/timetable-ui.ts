@@ -7,11 +7,19 @@ export function timeToMinutes(time: string) {
   return hours * 60 + minutes;
 }
 
-export function formatTime(time: string) {
+export function getTimeParts(time: string) {
   const [hours, minutes] = time.split(":").map(Number);
-  const suffix = hours >= 12 ? "PM" : "AM";
+  const meridiem = hours >= 12 ? "PM" : "AM";
   const displayHour = hours % 12 || 12;
-  return `${displayHour}:${String(minutes).padStart(2, "0")} ${suffix}`;
+  return {
+    clock: `${displayHour}:${String(minutes).padStart(2, "0")}`,
+    meridiem,
+  };
+}
+
+export function formatTime(time: string) {
+  const { clock, meridiem } = getTimeParts(time);
+  return `${clock} ${meridiem}`;
 }
 
 export function formatRange(lecture: Lecture) {
