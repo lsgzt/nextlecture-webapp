@@ -9,7 +9,7 @@ const problemSteps = ["Find department", "Find branch", "Find section", "Find th
 export default function Home() {
   return (
     <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
-      <header className="container sticky top-0 z-20 flex h-18 items-center justify-between border-b border-border/70 bg-background/92 backdrop-blur supports-[backdrop-filter]:bg-background/75">
+      <header className="container sticky top-0 z-20 flex h-18 items-center justify-between border-b border-border/40 bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
         <Link href="/" className="group inline-flex items-center gap-2.5 font-display text-[1.1rem] font-semibold tracking-[-0.04em] text-foreground">
           <img
             src={BRAND_LOGO_URL}
@@ -32,9 +32,11 @@ export default function Home() {
       </header>
 
       <main>
-        <div className="container pt-5"><AnnouncementBanner /></div>
         <section className="hero-grid">
-          <div className="container grid items-center gap-12 py-15 sm:py-20 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16 lg:py-26">
+          <div className="container pt-4 sm:pt-5">
+            <AnnouncementBanner />
+          </div>
+          <div className="container grid items-center gap-12 pb-15 pt-8 sm:pb-20 sm:pt-10 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16 lg:pb-26 lg:pt-12">
             <div className="relative z-10 max-w-2xl">
               <p className="eyebrow"><span className="h-1.5 w-1.5 rounded-full bg-teal-600" /> MADE FOR GNDEC STUDENTS</p>
               <h1 className="mt-5 max-w-xl font-display text-[2.85rem] font-semibold leading-[0.99] tracking-[-0.06em] text-balance text-foreground sm:text-6xl lg:text-[4.35rem]">
