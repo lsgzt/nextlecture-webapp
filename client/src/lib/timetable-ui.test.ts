@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getLecturesForDay, getTomorrowLectures } from "./timetable-ui";
+import { getLecturesForDay, getTomorrowLectures, formatLectureType } from "./timetable-ui";
 
 const timetable = {
   lectures: [
@@ -17,5 +17,14 @@ describe("expanded timetable navigation", () => {
   it("returns the matching weekday lectures for the Full week view", () => {
     expect(getLecturesForDay(timetable, "Monday")).toMatchObject([{ subject: "Monday class" }]);
     expect(getLecturesForDay(timetable, "Wednesday")).toEqual([]);
+  });
+});
+
+describe("formatLectureType", () => {
+  it("maps L T P codes to readable labels", () => {
+    expect(formatLectureType("L")).toBe("Lecture");
+    expect(formatLectureType("T")).toBe("Tutorial");
+    expect(formatLectureType("P")).toBe("Practical");
+    expect(formatLectureType(null)).toBeNull();
   });
 });

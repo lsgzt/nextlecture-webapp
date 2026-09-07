@@ -18,6 +18,16 @@ export function formatRange(lecture: Lecture) {
   return `${formatTime(lecture.startTime)} – ${formatTime(lecture.endTime)}`;
 }
 
+/** Map official activity tags L / T / P to readable labels. */
+export function formatLectureType(lectureType: string | null | undefined): string | null {
+  if (!lectureType) return null;
+  const code = lectureType.trim().toUpperCase();
+  if (code === "L" || code === "LECTURE") return "Lecture";
+  if (code === "T" || code === "TUTORIAL") return "Tutorial";
+  if (code === "P" || code === "PRACTICAL" || code === "LAB") return "Practical";
+  return lectureType.trim();
+}
+
 export function getTodayName(now = new Date()): Weekday | null {
   const index = now.getDay();
   return index >= 1 && index <= 5 ? DAY_ORDER[index - 1] : null;
