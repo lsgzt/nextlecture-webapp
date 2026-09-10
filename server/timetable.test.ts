@@ -58,6 +58,61 @@ describe("GNDEC timetable parser", () => {
   });
 });
 
+
+describe("plain-text official timetable cells (Sep 2026 export)", () => {
+  const PLAIN_HTML = `
+  <html><body>
+  <li>Year BTECH FIRST YEAR CHEMISTRY GROUP
+    <ul><li>Group ITB: <a href="#table_56">ITB2</a></li></ul>
+  </li>
+  <table id="table_56" border="1" class="odd_table">
+    <caption><span class="institution">GNDEC</span><br /><span class="name">ITB2</span></caption>
+    <thead><tr><td></td><th class="xAxis">Monday</th><th class="xAxis">Tuesday</th><th class="xAxis">Wednesday</th><th class="xAxis">Thursday</th><th class="xAxis">Friday</th></tr></thead>
+    <tbody>
+      <tr>
+        <th class="yAxis">09:30</th>
+        <td>ITB<br />BASIC ELECTRICAL AND ELECTRONICS ENGINEERING L<br />ER. MANI BANSAL (EE)<br />S205<br /></td>
+        <td>---</td><td>---</td><td>---</td>
+        <td rowspan="2">PROGRAMMING FOR PROBLEM SOLVING P<br />ER. HARDEEPAK SINGH (IT)<br />PL1 LAB IT DEPT<br /></td>
+      </tr>
+      <tr>
+        <th class="yAxis">10:30</th>
+        <td>ITB<br />PROFESSIONAL ENGLISH COMMUNICATION L<br />Ms. MANPREET KAUR.<br />S205<br /></td>
+        <td>---</td><td>---</td><td>---</td>
+        <!-- span -->
+      </tr>
+    </tbody>
+  </table>
+  </body></html>`;
+
+  it("parses br-separated subject, type, teacher and venue without FET CSS classes", () => {
+    const parsed = parseTimetableHtml(PLAIN_HTML);
+    const group = parsed.timetables.find(item => item.group.code === "ITB2");
+    expect(group).toBeTruthy();
+    expect(group!.lectures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          day: "Monday",
+          startTime: "09:30",
+          subject: "BASIC ELECTRICAL AND ELECTRONICS ENGINEERING",
+          lectureType: "L",
+          teacher: "ER. MANI BANSAL (EE)",
+          venue: "S205",
+        }),
+        expect.objectContaining({
+          day: "Friday",
+          startTime: "09:30",
+          endTime: "11:30",
+          subject: "PROGRAMMING FOR PROBLEM SOLVING",
+          lectureType: "P",
+          teacher: "ER. HARDEEPAK SINGH (IT)",
+          venue: "PL1 LAB IT DEPT",
+        }),
+      ]),
+    );
+  });
+});
+
 describe("official-first timetable source resolver", () => {
   const officialIndex = "https://appsc.gndec.ac.in/time_tables";
   const validSource = "https://appsc.gndec.ac.in/sites/default/files/2026-08/current_subgroups_days_horizontal.html";

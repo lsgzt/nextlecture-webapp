@@ -15,7 +15,7 @@ export const TIMETABLE_OFFICIAL_INDEX_URL = "https://appsc.gndec.ac.in/time_tabl
  * Normal operation discovers the current URL from TIMETABLE_OFFICIAL_INDEX_URL.
  */
 export const TIMETABLE_SOURCE_URL =
-  "https://appsc.gndec.ac.in/sites/default/files/2026-08/23_08_2026%20FINAL_FILE%20R4_subgroups_days_horizontal.html";
+  "https://appsc.gndec.ac.in/sites/default/files/2026-09/06_09_2026%20ON%20WEBSITE_subgroups_days_horizontal.html";
 
 /** Public, credential-free fallback that is consulted only when official discovery fails. */
 export const TIMETABLE_SOURCE_FALLBACK_API_URL = "https://gndec-pyq-rag-api.vercel.app/api/timetable-source";

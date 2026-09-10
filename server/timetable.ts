@@ -41,7 +41,7 @@ export type TimetableSourceResolverOptions = {
   lastKnownSourceUrl?: string | null;
 };
 
-const CACHE_KEY = "official-gnedc-timetable";
+const CACHE_KEY = "official-gnedc-timetable-v2";
 const REQUEST_TIMEOUT_MS = 12_000;
 const SOURCE_RESOLUTION_TIMEOUT_MS = 7_000;
 const OFFICIAL_TIMETABLE_HOST = "appsc.gndec.ac.in";
@@ -192,6 +192,50 @@ function getSourceYears(html: string) {
   return sourceYears;
 }
 
+/**
+ * Collect visible text lines from a timetable cell.
+ * Supports both legacy FET markup (.subject / .teacher / .room) and the
+ * current official export that only uses plain text separated by <br />.
+ */
+function cellLines($: ReturnType<typeof load>, cell: ReturnType<ReturnType<typeof load>>) {
+  const structured: string[] = [];
+  const subject = normalizeText(cell.find(".subject").first().text());
+  const line1 = normalizeText(cell.find(".line1").first().text());
+  const teacher = normalizeText(cell.find(".teacher").first().text());
+  const room = normalizeText(cell.find(".room").first().text());
+  if (subject || line1 || teacher || room) {
+    if (subject || line1) structured.push(subject || line1);
+    if (teacher) structured.push(teacher);
+    if (room) structured.push(room);
+    return structured;
+  }
+
+  const html = cell.html() ?? "";
+  if (/<br\s*\/?\s*>/i.test(html)) {
+    return html
+      .split(/<br\s*\/?\s*>/i)
+      .map(fragment => normalizeText(load(`<div>${fragment}</div>`).text()))
+      .filter(Boolean)
+      .filter(line => line !== "---");
+  }
+
+  const raw = normalizeText(cell.text());
+  return raw && raw !== "---" ? [raw] : [];
+}
+
+/** Short subgroup labels that the college prefixes onto many cells (e.g. ITB, MEA1). */
+function looksLikeGroupPrefix(line: string) {
+  return /^[A-Z]{1,6}\d{0,2}[A-Z]?\d{0,2}$/i.test(line) || /^D\d[A-Z]{1,6}\d{0,2}$/i.test(line);
+}
+
+function extractSubjectAndType(line: string) {
+  const match = line.match(/^(.*?)(?:\s+([LPT]))$/i);
+  if (match && match[1].trim()) {
+    return { subject: normalizeText(match[1]), lectureType: match[2].toUpperCase() };
+  }
+  return { subject: line, lectureType: null as string | null };
+}
+
 function parseLectureCell(
   $: ReturnType<typeof load>,
   cell: ReturnType<ReturnType<typeof load>>,
@@ -202,14 +246,38 @@ function parseLectureCell(
   const raw = normalizeText(cell.text());
   if (!raw || raw === "---" || cell.hasClass("empty")) return null;
 
-  const rawSubject = normalizeText(cell.find(".subject").first().text());
-  const rawLine = normalizeText(cell.find(".line1").first().text());
-  const lectureType = normalizeText(cell.find(".activitytag").first().text()).toUpperCase() || null;
-  const subject = rawSubject || rawLine.replace(/\s+[LPT]$/i, "").trim() || raw;
-  const teacher = normalizeText(cell.find(".teacher").first().text()) || null;
-  const venue = normalizeText(cell.find(".room").first().text()) || null;
+  const structuredType = normalizeText(cell.find(".activitytag").first().text()).toUpperCase() || null;
+  const lines = cellLines($, cell);
+  if (!lines.length) return null;
+
+  let working = [...lines];
+  if (working.length >= 2 && looksLikeGroupPrefix(working[0])) working = working.slice(1);
+
+  const head = working[0] ?? raw;
+  const { subject: parsedSubject, lectureType: trailingType } = extractSubjectAndType(head);
+  const lectureType =
+    (structuredType && /^[LPT]$/.test(structuredType) ? structuredType : null) ||
+    (trailingType && /^[LPT]$/.test(trailingType) ? trailingType : null);
+
+  let teacher: string | null = null;
+  let venue: string | null = null;
+  if (working.length >= 3) {
+    teacher = working[1] || null;
+    venue = working.slice(2).join(" ") || null;
+  } else if (working.length === 2) {
+    // Subject + teacher or subject + venue — prefer teacher-like second line.
+    const second = working[1];
+    if (/\b(lab|hall|block|dept|room)\b/i.test(second) || /^[A-Z]?\d{1,4}[A-Z]?\b/i.test(second)) {
+      venue = second;
+    } else {
+      teacher = second;
+    }
+  }
+
+  const subject = parsedSubject || raw;
   const startMinutes = parseTimeToMinutes(startTime);
   const endTime = startMinutes === null ? startTime : minutesToTime(startMinutes + durationSlots * 60);
+  const confidence = cell.find(".subject").length > 0 || working.length >= 2 ? "structured" : "partial";
 
   return {
     day,
@@ -218,9 +286,9 @@ function parseLectureCell(
     subject,
     teacher,
     venue,
-    lectureType: lectureType && /^[LPT]$/.test(lectureType) ? lectureType : null,
+    lectureType,
     raw,
-    confidence: rawSubject ? "structured" : "partial",
+    confidence,
   };
 }
 
