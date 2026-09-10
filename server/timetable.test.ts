@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { afterEach, vi } from "vitest";
-import { buildTimetableRequestHeaders, discoverTimetableSourceFromIndexHtml, fetchEmergencyTimetableSnapshot, findGroupTimetable, getOfficialTimetable, parseTimetableHtml, resolveTimetableSource, setTimetableCacheForTests, validateOfficialTimetableUrl } from "./timetable";
+import { buildTimetableRequestHeaders, discoverTimetableSourceFromIndexHtml, scoreTimetableSourceUrl, fetchEmergencyTimetableSnapshot, findGroupTimetable, getOfficialTimetable, parseTimetableHtml, resolveTimetableSource, setTimetableCacheForTests, validateOfficialTimetableUrl } from "./timetable";
 import { TIMETABLE_EMERGENCY_SNAPSHOT_URL } from "../shared/config";
 
 const SAMPLE_TIMETABLE_HTML = `
@@ -182,8 +182,19 @@ describe("official-first timetable source resolver", () => {
     expect(buildTimetableRequestHeaders(previous, "https://appsc.gndec.ac.in/sites/default/files/2026-09/future.html")).not.toHaveProperty("If-None-Match");
   });
 
-  it("parses the first usable subsection link in document order", () => {
+  it("parses a usable subsection subgroups link from the official index", () => {
     expect(discoverTimetableSourceFromIndexHtml(`<a href="/bad.pdf">Sub-section wise</a><a href="/sites/default/files/2026-08/current_subgroups_days_horizontal.html">Subsection wise</a>`, officialIndex)).toBe(validSource);
+  });
+
+  it("prefers the newest dated Sub-section subgroups export over older links", () => {
+    const older = "https://appsc.gndec.ac.in/sites/default/files/2026-08/23_08_2026%20FINAL_FILE%20R4_subgroups_days_horizontal.html";
+    const newer = "https://appsc.gndec.ac.in/sites/default/files/2026-09/06_09_2026%20ON%20WEBSITE_subgroups_days_horizontal.html";
+    const html = `
+      <a href="${older}">Sub-section wise Time Table</a>
+      <a href="${newer}">Sub-section wise Time Table</a>
+      <a href="/sites/default/files/2026-09/06_09_2026%20ON%20WEBSITE_groups_days_horizontal.html">Group wise</a>`;
+    expect(discoverTimetableSourceFromIndexHtml(html, officialIndex)).toBe(newer);
+    expect(scoreTimetableSourceUrl(newer)).toBeGreaterThan(scoreTimetableSourceUrl(older));
   });
 
   it("returns a fresh cached timetable immediately while source resolution proceeds in the background", async () => {

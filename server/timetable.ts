@@ -41,9 +41,9 @@ export type TimetableSourceResolverOptions = {
   lastKnownSourceUrl?: string | null;
 };
 
-const CACHE_KEY = "official-gnedc-timetable-v2";
-const REQUEST_TIMEOUT_MS = 12_000;
-const SOURCE_RESOLUTION_TIMEOUT_MS = 7_000;
+const CACHE_KEY = "official-gnedc-timetable-v3";
+const REQUEST_TIMEOUT_MS = 25_000;
+const SOURCE_RESOLUTION_TIMEOUT_MS = 15_000;
 const OFFICIAL_TIMETABLE_HOST = "appsc.gndec.ac.in";
 const EMERGENCY_SNAPSHOT_NOTICE = "The official GNDEC timetable source is temporarily unavailable. Showing a verified emergency snapshot while it recovers.";
 
@@ -101,17 +101,40 @@ export function validateOfficialTimetableUrl(candidate: string | null | undefine
   }
 }
 
-/** Find the first valid official Sub-section wise timetable anchor in document order. */
+/**
+ * Score official timetable URLs so the newest Sub-section export wins.
+ * Prefer paths like /2026-09/06_09_2026…_subgroups_days_horizontal.html over older months.
+ */
+export function scoreTimetableSourceUrl(url: string) {
+  let score = 0;
+  const folder = url.match(/\/(20\d{2})-(\d{2})\//);
+  if (folder) score += Number(folder[1]) * 1_000_000 + Number(folder[2]) * 10_000;
+  const fileDate = decodeURIComponent(url).match(/(\d{1,2})[_\s-](\d{1,2})[_\s-](20\d{2})/);
+  if (fileDate) {
+    const day = Number(fileDate[1]);
+    const month = Number(fileDate[2]);
+    const year = Number(fileDate[3]);
+    // Filenames are typically DD_MM_YYYY on the GNDEC site.
+    score += year * 1_000_000 + month * 10_000 + day;
+  }
+  if (/subgroups_days_horizontal/i.test(url)) score += 500;
+  return score;
+}
+
+/** Pick the newest valid official Sub-section wise subgroups HTML from the index page. */
 export function discoverTimetableSourceFromIndexHtml(html: string, indexUrl = TIMETABLE_OFFICIAL_INDEX_URL) {
   const $ = load(html);
-  let discovered: string | null = null;
+  const candidates: string[] = [];
   $("a").each((_, anchor) => {
-    if (discovered) return;
     const visibleText = normalizeText($(anchor).text());
     if (!/sub[-\s]?section\s+wise/i.test(visibleText)) return;
-    discovered = validateOfficialTimetableUrl($(anchor).attr("href"), indexUrl);
+    const url = validateOfficialTimetableUrl($(anchor).attr("href"), indexUrl);
+    if (!url || !/subgroups_days_horizontal/i.test(url)) return;
+    candidates.push(url);
   });
-  return discovered;
+  if (!candidates.length) return null;
+  candidates.sort((left, right) => scoreTimetableSourceUrl(right) - scoreTimetableSourceUrl(left));
+  return candidates[0] ?? null;
 }
 
 /** Build conditional headers only for the exact source that produced the cached payload. */
@@ -140,7 +163,7 @@ export async function resolveTimetableSource(options: TimetableSourceResolverOpt
   try {
     const response = await fetcher(officialIndexUrl, {
       headers: { Accept: "text/html,application/xhtml+xml", "User-Agent": "NextLecture/1.0 (official source discovery)" },
-      redirect: "error",
+      redirect: "follow",
       signal: AbortSignal.timeout(SOURCE_RESOLUTION_TIMEOUT_MS),
     });
     if (!response.ok) throw new Error(`The official timetable index responded with ${response.status}.`);
@@ -161,7 +184,16 @@ export async function resolveTimetableSource(options: TimetableSourceResolverOpt
     const payload = JSON.parse(await response.text()) as { url?: unknown };
     const discovered = typeof payload.url === "string" ? validateOfficialTimetableUrl(payload.url, officialIndexUrl) : null;
     if (!discovered) throw new Error("The timetable fallback did not provide a valid official GNDEC HTML URL.");
-    return { url: discovered, source: "vercel-fallback", officialError, fallbackError: null };
+    // Prefer the bundled last-known URL when it is clearly newer than a stale fallback API response.
+    const builtIn = validateOfficialTimetableUrl(TIMETABLE_SOURCE_URL, officialIndexUrl);
+    const preferred =
+      builtIn && scoreTimetableSourceUrl(builtIn) > scoreTimetableSourceUrl(discovered) ? builtIn : discovered;
+    return {
+      url: preferred,
+      source: preferred === discovered ? "vercel-fallback" : "built-in",
+      officialError,
+      fallbackError: null,
+    };
   } catch (error) {
     fallbackError = asErrorMessage(error);
   }
