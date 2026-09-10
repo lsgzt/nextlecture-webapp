@@ -41,7 +41,7 @@ export type TimetableSourceResolverOptions = {
   lastKnownSourceUrl?: string | null;
 };
 
-const CACHE_KEY = "official-gnedc-timetable-v3";
+const CACHE_KEY = "official-gnedc-timetable-v4";
 const REQUEST_TIMEOUT_MS = 25_000;
 const SOURCE_RESOLUTION_TIMEOUT_MS = 15_000;
 const OFFICIAL_TIMETABLE_HOST = "appsc.gndec.ac.in";
@@ -361,6 +361,13 @@ export function parseTimetableHtml(html: string): TimetablePayload {
         spanRemaining[dayIndex] = durationSlots - 1;
         dayIndex += 1;
       });
+      // Consume trailing rowspans for days with no <td> this row (e.g. a Friday
+      // 2-hour class leaves no cell on the next hour; without this those days
+      // stay "blocked" and later real lectures on that day are skipped).
+      while (dayIndex < dayHeaders.length) {
+        if (spanRemaining[dayIndex] > 0) spanRemaining[dayIndex] -= 1;
+        dayIndex += 1;
+      }
     });
 
     const footerText = normalizeText(table.find("tr.foot").text());

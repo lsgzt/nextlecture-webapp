@@ -111,6 +111,53 @@ describe("plain-text official timetable cells (Sep 2026 export)", () => {
       ]),
     );
   });
+
+  it("keeps a trailing Friday lecture after a rowspan earlier in the day", () => {
+    const html = `
+    <html><body>
+    <li>Year BTECH FIRST YEAR CHEMISTRY GROUP<ul><li>Group ITB: <a href="#table_56">ITB2</a></li></ul></li>
+    <table id="table_56">
+      <caption><span class="name">ITB2</span></caption>
+      <thead><tr><td></td><th class="xAxis">Monday</th><th class="xAxis">Tuesday</th><th class="xAxis">Wednesday</th><th class="xAxis">Thursday</th><th class="xAxis">Friday</th></tr></thead>
+      <tbody>
+        <tr>
+          <th class="yAxis">13:30</th>
+          <td>---</td><td>---</td><td>---</td><td>---</td>
+          <td rowspan="2">PROFESSIONAL ENGLISH COMMUNICATION P<br />Ms. UPKARJIT KAUR<br />ENG LAB<br /></td>
+        </tr>
+        <tr>
+          <th class="yAxis">14:30</th>
+          <td>---</td><td>---</td><td>---</td><td>---</td>
+          <!-- span -->
+        </tr>
+        <tr>
+          <th class="yAxis">15:30</th>
+          <td>---</td><td>---</td><td>---</td><td>---</td>
+          <td>BASIC ELECTRICAL AND ELECTRONICS ENGINEERING T<br />ER. MANI BANSAL (EE)<br />F113<br /></td>
+        </tr>
+      </tbody>
+    </table>
+    </body></html>`;
+    const parsed = parseTimetableHtml(html);
+    const group = parsed.timetables.find(item => item.group.code === "ITB2");
+    expect(group!.lectures.filter(item => item.day === "Friday")).toEqual([
+      expect.objectContaining({
+        startTime: "13:30",
+        endTime: "15:30",
+        subject: "PROFESSIONAL ENGLISH COMMUNICATION",
+        lectureType: "P",
+        teacher: "Ms. UPKARJIT KAUR",
+      }),
+      expect.objectContaining({
+        startTime: "15:30",
+        endTime: "16:30",
+        subject: "BASIC ELECTRICAL AND ELECTRONICS ENGINEERING",
+        lectureType: "T",
+        teacher: "ER. MANI BANSAL (EE)",
+        venue: "F113",
+      }),
+    ]);
+  });
 });
 
 describe("official-first timetable source resolver", () => {
