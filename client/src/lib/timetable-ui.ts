@@ -78,24 +78,39 @@ export type NextLectureResult = {
 
 export function getNextLecture(timetable: GroupTimetable | null, now = new Date()): NextLectureResult {
   if (!timetable?.lectures.length) return null;
-  const jsDay = now.getDay();
-  const todayIndex = jsDay >= 1 && jsDay <= 5 ? jsDay - 1 : 5;
   const currentMinute = getMinutesNow(now);
 
-  for (let offset = 0; offset < 7; offset += 1) {
-    const targetIndex = (todayIndex + offset) % DAY_ORDER.length;
-    const day = DAY_ORDER[targetIndex];
-    const lessons = timetable.lectures.filter(lecture => lecture.day === day);
+  // Walk real calendar days so weekend → Monday uses the correct offset
+  // (Saturday→Monday = 2, Sunday→Monday = 1), not a weekday-index shortcut.
+  for (let calendarOffset = 0; calendarOffset < 8; calendarOffset += 1) {
+    const candidate = new Date(now);
+    candidate.setHours(12, 0, 0, 0);
+    candidate.setDate(now.getDate() + calendarOffset);
+    const candidateJsDay = candidate.getDay();
+    if (candidateJsDay === 0 || candidateJsDay === 6) continue;
+
+    const day = DAY_ORDER[candidateJsDay - 1];
+    const lessons = timetable.lectures
+      .filter(lecture => lecture.day === day)
+      .slice()
+      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
     for (const lecture of lessons) {
       const starts = timeToMinutes(lecture.startTime);
       const ends = timeToMinutes(lecture.endTime);
-      if (offset === 0 && jsDay >= 1 && jsDay <= 5 && currentMinute >= ends) continue;
-      if (offset === 0 && jsDay >= 1 && jsDay <= 5 && currentMinute >= starts && currentMinute < ends) {
-        return { lecture, dayOffset: 0, phase: "current" };
+
+      if (calendarOffset === 0) {
+        if (currentMinute >= ends) continue;
+        if (currentMinute >= starts && currentMinute < ends) {
+          return { lecture, dayOffset: 0, phase: "current" };
+        }
+        if (starts > currentMinute) {
+          return { lecture, dayOffset: 0, phase: "upcoming" };
+        }
+        continue;
       }
-      if (offset > 0 || jsDay === 0 || jsDay === 6 || starts > currentMinute) {
-        return { lecture, dayOffset: offset || (jsDay === 0 || jsDay === 6 ? 1 : 0), phase: "upcoming" };
-      }
+
+      return { lecture, dayOffset: calendarOffset, phase: "upcoming" };
     }
   }
   return null;
@@ -111,8 +126,10 @@ export function humanizeDuration(minutes: number) {
 }
 
 export function getDayLabel(offset: number, current = new Date()) {
-  if (offset === 0 && current.getDay() >= 1 && current.getDay() <= 5) return "Today";
-  if (offset === 1 || (current.getDay() === 0 && offset === 1)) return "Tomorrow";
+  if (offset <= 0) {
+    return current.getDay() >= 1 && current.getDay() <= 5 ? "Today" : "Today";
+  }
+  if (offset === 1) return "Tomorrow";
   const target = new Date(current);
   target.setDate(current.getDate() + offset);
   return target.toLocaleDateString(undefined, { weekday: "long" });
