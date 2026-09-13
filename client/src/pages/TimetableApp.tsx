@@ -59,31 +59,56 @@ function Freshness({ fetchedAt, freshness, updateError }: { fetchedAt?: number; 
   return <div className={`flex items-center gap-2 text-xs font-medium ${stale ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground"}`}>{stale ? <AlertCircle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />}<span>{stale ? "Using last saved timetable" : `Timetable ${label}`}</span></div>;
 }
 
-function GroupPicker({ groups, selectedGroup, onSelect }: { groups: { code: string; sourceYear: string }[]; selectedGroup: string | null; onSelect: (code: string) => void }) {
+function GroupPicker({
+  groups,
+  selectedGroup,
+  onSelect,
+  onClose,
+  title = "Select your timetable group",
+  eyebrow = "GET STARTED",
+}: {
+  groups: { code: string; sourceYear: string }[];
+  selectedGroup: string | null;
+  onSelect: (code: string) => void;
+  onClose?: () => void;
+  title?: string;
+  eyebrow?: string;
+}) {
   const [filter, setFilter] = useState("");
-  const visibleGroups = groups.filter(group => `${group.code} ${group.sourceYear}`.toLowerCase().includes(filter.toLowerCase())).sort((a, b) => (a.code === "ITB2" ? -1 : b.code === "ITB2" ? 1 : a.code.localeCompare(b.code)));
-  return <section className="mx-auto w-full max-w-xl rounded-[1.75rem] border border-border bg-card p-6 shadow-xl shadow-stone-950/[0.05] sm:p-8"><p className="eyebrow">GET STARTED</p><h1 className="mt-4 font-display text-3xl font-semibold tracking-[-0.055em] sm:text-4xl">Select your timetable group</h1><p className="mt-3 leading-7 text-muted-foreground">Your choice stays on this device. The available groups are loaded directly from the official GNDEC timetable.</p><label className="relative mt-7 block"><span className="sr-only">Search timetable groups</span><Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><input value={filter} onChange={event => setFilter(event.target.value)} placeholder="Search groups, for example ITB2" className="h-12 w-full rounded-xl border border-input bg-background pl-11 pr-4 text-sm outline-none transition placeholder:text-muted-foreground focus:border-teal-600 focus:ring-4 focus:ring-teal-600/10" /></label><div className="mt-4 max-h-75 overflow-y-auto rounded-xl border border-border p-2"><div className="grid gap-1.5">{visibleGroups.map(group => <button key={group.code} type="button" onClick={() => onSelect(group.code)} className={`flex min-h-13 items-center justify-between rounded-lg px-3 text-left transition hover:bg-teal-50 dark:hover:bg-teal-950/30 ${selectedGroup === group.code ? "bg-teal-50 text-teal-900 dark:bg-teal-950/35 dark:text-teal-100" : "text-foreground"}`}><span className="font-semibold">{group.code}</span><span className="max-w-[56%] text-right text-xs leading-4 text-muted-foreground">{group.sourceYear.replace(/^Year\s+/i, "")}</span></button>)}{visibleGroups.length === 0 && <p className="px-3 py-8 text-center text-sm text-muted-foreground">No official timetable group matches that search.</p>}</div></div></section>;
-}
+  const visibleGroups = groups
+    .filter(group => `${group.code} ${group.sourceYear}`.toLowerCase().includes(filter.toLowerCase()))
+    .sort((a, b) => (a.code === "ITB2" ? -1 : b.code === "ITB2" ? 1 : a.code.localeCompare(b.code)));
 
-function CompactTime({ time, className = "" }: { time: string; className?: string }) {
-  const { clock, meridiem } = getTimeParts(time);
   return (
-    <span className={`inline-flex items-baseline gap-0.5 tabular-nums ${className}`.trim()}>
-      <span>{clock}</span>
-      <span className="text-[0.65em] font-semibold leading-none opacity-75">{meridiem}</span>
-    </span>
+    <section className="relative mx-auto w-full max-w-xl rounded-[1.75rem] border border-border bg-card p-6 shadow-xl shadow-stone-950/[0.08] sm:p-8">
+      {onClose && (
+        <button type="button" onClick={onClose} className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground" aria-label="Close group picker">
+          <span className="text-lg leading-none">×</span>
+        </button>
+      )}
+      <p className="eyebrow">{eyebrow}</p>
+      <h1 className="mt-4 pr-8 font-display text-3xl font-semibold tracking-[-0.055em] sm:text-4xl">{title}</h1>
+      <p className="mt-3 leading-7 text-muted-foreground">Your choice stays on this device. The available groups are loaded directly from the official GNDEC timetable.</p>
+      <label className="relative mt-7 block">
+        <span className="sr-only">Search timetable groups</span>
+        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <input value={filter} onChange={event => setFilter(event.target.value)} placeholder="Search groups, for example ITB2" className="h-12 w-full rounded-xl border border-input bg-background pl-11 pr-4 text-sm outline-none transition placeholder:text-muted-foreground focus:border-teal-600 focus:ring-4 focus:ring-teal-600/10" />
+      </label>
+      <div className="mt-4 max-h-75 overflow-y-auto rounded-xl border border-border p-2">
+        <div className="grid gap-1.5">
+          {visibleGroups.map(group => (
+            <button key={group.code} type="button" onClick={() => onSelect(group.code)} className={`flex min-h-13 items-center justify-between rounded-lg px-3 text-left transition hover:bg-teal-50 dark:hover:bg-teal-950/30 ${selectedGroup === group.code ? "bg-teal-50 text-teal-900 dark:bg-teal-950/35 dark:text-teal-100" : "text-foreground"}`}>
+              <span className="font-semibold">{group.code}</span>
+              <span className="max-w-[56%] text-right text-xs leading-4 text-muted-foreground">{group.sourceYear.replace(/^Year\s+/i, "")}</span>
+            </button>
+          ))}
+          {visibleGroups.length === 0 && <p className="px-3 py-8 text-center text-sm text-muted-foreground">No official timetable group matches that search.</p>}
+        </div>
+      </div>
+    </section>
   );
 }
 
-function CompactRange({ startTime, endTime, className = "" }: { startTime: string; endTime: string; className?: string }) {
-  return (
-    <span className={className}>
-      <CompactTime time={startTime} />
-      <span className="mx-1 opacity-60">–</span>
-      <CompactTime time={endTime} />
-    </span>
-  );
-}
 
 function ScheduleCard({ lecture, now }: { lecture: NonNullable<LocalTimetable>["timetable"]["lectures"][number]; now: Date }) {
   const status = lectureStatus(lecture, now);
@@ -293,13 +318,29 @@ export default function TimetableApp() {
 
 {groupsQuery.isLoading && !localTimetable && <div className="mx-auto max-w-xl rounded-3xl border border-border bg-card p-9 text-center"><LoaderCircle className="mx-auto h-6 w-6 animate-spin text-teal-700" /><p className="mt-4 font-medium">Loading the official timetable groups…</p><p className="mt-1 text-sm text-muted-foreground">This only takes a moment.</p></div>}
     {groupsQuery.isError && !localTimetable && <div className="mx-auto max-w-xl rounded-3xl border border-amber-200 bg-amber-50 p-7 dark:border-amber-900/60 dark:bg-amber-950/25"><AlertCircle className="h-6 w-6 text-amber-700 dark:text-amber-300" /><h1 className="mt-4 font-display text-2xl font-semibold tracking-[-0.045em]">The official timetable is unavailable.</h1><p className="mt-2 leading-7 text-muted-foreground">We couldn’t load a valid timetable yet. Please check your connection and try again.</p><button type="button" onClick={() => groupsQuery.refetch()} className="mt-5 rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-800 active:scale-[0.97]">Try again</button></div>}
-    {!groupsQuery.isLoading && !groupsQuery.isError && (!selectedGroup || showPicker) && <GroupPicker groups={groups} selectedGroup={selectedGroup} onSelect={chooseGroup} />}
-    {selectedGroup && !showPicker && <div className="space-y-6">
-
-      
-      
-      
-    </div>}
+    {!groupsQuery.isLoading && !groupsQuery.isError && !selectedGroup && (
+      <GroupPicker groups={groups} selectedGroup={selectedGroup} onSelect={chooseGroup} />
+    )}
+    {selectedGroup && showPicker && (
+      <div
+        className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/45 px-4 py-8 backdrop-blur-[2px] sm:items-center sm:py-10"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Change timetable group"
+        onClick={() => setShowPicker(false)}
+      >
+        <div className="nl-enter w-full max-w-xl" onClick={event => event.stopPropagation()}>
+          <GroupPicker
+            groups={groups}
+            selectedGroup={selectedGroup}
+            onSelect={chooseGroup}
+            onClose={() => setShowPicker(false)}
+            eyebrow="CHANGE GROUP"
+            title="Choose your timetable group"
+          />
+        </div>
+      </div>
+    )}
   <p className="mt-10 pb-4 text-center text-xs text-muted-foreground"><a href="https://lsgz.vercel.app" target="_blank" rel="noreferrer" className="font-semibold text-teal-700 underline decoration-teal-400 underline-offset-2 transition hover:text-teal-950 dark:text-teal-300 dark:hover:text-white">Built and maintained by LSGZ</a></p>
   </main></div>;
 }
