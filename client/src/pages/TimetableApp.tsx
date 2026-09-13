@@ -110,6 +110,26 @@ function GroupPicker({
 }
 
 
+function CompactTime({ time, className = "" }: { time: string; className?: string }) {
+  const { clock, meridiem } = getTimeParts(time);
+  return (
+    <span className={`inline-flex items-baseline gap-0.5 tabular-nums ${className}`.trim()}>
+      <span>{clock}</span>
+      <span className="text-[0.65em] font-semibold leading-none opacity-75">{meridiem}</span>
+    </span>
+  );
+}
+
+function CompactRange({ startTime, endTime, className = "" }: { startTime: string; endTime: string; className?: string }) {
+  return (
+    <span className={className}>
+      <CompactTime time={startTime} />
+      <span className="mx-1 opacity-60">–</span>
+      <CompactTime time={endTime} />
+    </span>
+  );
+}
+
 function ScheduleCard({ lecture, now }: { lecture: NonNullable<LocalTimetable>["timetable"]["lectures"][number]; now: Date }) {
   const status = lectureStatus(lecture, now);
   const stateCopy = status === "current" ? "HAPPENING NOW" : status === "past" ? "COMPLETED" : "UP NEXT";
