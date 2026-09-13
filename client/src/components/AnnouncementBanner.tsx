@@ -91,7 +91,7 @@ export function AnnouncementBanner({ className = "" }: { className?: string }) {
         <button
           type="button"
           onClick={() => restore(latest.id)}
-          className="group flex w-full items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-left shadow-sm transition hover:border-teal-600/40 hover:bg-teal-50/40 dark:hover:bg-teal-950/30"
+          className="nl-enter group flex w-full items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-left shadow-sm transition hover:border-teal-600/40 hover:bg-teal-50/40 dark:hover:bg-teal-950/30"
           aria-label="Show announcement again"
         >
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-teal-50 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300">
@@ -107,7 +107,7 @@ export function AnnouncementBanner({ className = "" }: { className?: string }) {
           </span>
           <span className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-teal-700 px-2.5 py-1.5 text-xs font-bold text-white transition group-hover:bg-teal-800">
             Show
-            <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+            <ChevronDown className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-y-0.5" aria-hidden="true" />
           </span>
         </button>
       </div>
@@ -118,7 +118,7 @@ export function AnnouncementBanner({ className = "" }: { className?: string }) {
     <div className={`grid gap-3 ${className}`.trim()}>
       <aside
         role="status"
-        className={`relative overflow-hidden rounded-2xl border px-4 py-3.5 shadow-sm sm:px-5 ${
+        className={`nl-enter relative overflow-hidden rounded-2xl border px-4 py-3.5 shadow-sm sm:px-5 ${
           isWarning
             ? "border-amber-300/80 bg-amber-50 text-amber-950 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-50"
             : "border-teal-200 bg-teal-50/90 text-teal-950 dark:border-teal-900/70 dark:bg-teal-950/40 dark:text-teal-50"

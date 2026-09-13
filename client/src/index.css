@@ -75,3 +75,57 @@
   overflow-wrap: anywhere;
   word-break: break-word;
 }
+
+/* Expand / collapse + enter animations used across the app */
+@layer components {
+  .expand-panel {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transition:
+      grid-template-rows 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 220ms ease;
+  }
+  .expand-panel[data-open="true"] {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+  .expand-panel > .expand-panel-inner {
+    min-height: 0;
+    overflow: hidden;
+  }
+}
+
+@keyframes nl-fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes nl-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.nl-enter {
+  animation: nl-fade-in-up 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.nl-fade {
+  animation: nl-fade-in 240ms ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .expand-panel {
+    transition: none;
+  }
+  .nl-enter,
+  .nl-fade {
+    animation: none;
+  }
+}
