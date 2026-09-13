@@ -11,11 +11,34 @@ import TimetableApp from "./pages/TimetableApp";
 import PreviousPapersPage from "./pages/PreviousPapersPage";
 import AttendancePage from "./pages/AttendancePage";
 import DownloadPage from "./pages/DownloadPage";
+import VacantRoomsPage from "./pages/VacantRoomsPage";
 
 function Router() {
-  return <Switch><Route path="/" component={Home} /><Route path="/app" component={TimetableApp} /><Route path="/attendance" component={AttendancePage} /><Route path="/syllabus" component={SyllabusPage} /><Route path="/papers" component={PreviousPapersPage} /><Route path="/download" component={DownloadPage} /><Route path="/404" component={NotFound} /><Route component={NotFound} /></Switch>;
+  return (
+    <Switch>
+      <Route path="/" component={Home} />
+      <Route path="/app" component={TimetableApp} />
+      <Route path="/vacant-rooms" component={VacantRoomsPage} />
+      <Route path="/attendance" component={AttendancePage} />
+      <Route path="/syllabus" component={SyllabusPage} />
+      <Route path="/papers" component={PreviousPapersPage} />
+      <Route path="/download" component={DownloadPage} />
+      <Route path="/404" component={NotFound} />
+      <Route component={NotFound} />
+    </Switch>
+  );
 }
 
 export default function App() {
-  return <ErrorBoundary><ThemeProvider defaultTheme="light" switchable><TooltipProvider><Toaster /><Router /><Analytics /></TooltipProvider></ThemeProvider></ErrorBoundary>;
+  return (
+    <ErrorBoundary>
+      <ThemeProvider defaultTheme="light" switchable>
+        <TooltipProvider>
+          <Toaster />
+          <Router />
+          <Analytics />
+        </TooltipProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
+  );
 }

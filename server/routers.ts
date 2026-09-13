@@ -9,6 +9,7 @@ import { getTemporarySectionStudent, prepareTemporarySectionBranch, searchTempor
 import { getOfficialSyllabusDocument } from "./syllabus";
 import { getPreviousPapers, getPreviousPaperSessions } from "./previousPapers";
 import { recoverAndroidRegistrationNumber } from "./androidProfileRecovery";
+import { getVacantRooms } from "./vacantRooms";
 
 async function loadGroup(group: string, forceRefresh = false) {
   try {
@@ -153,6 +154,33 @@ export const appRouter = router({
       }
     }),
   }),
+  vacantRooms: router({
+    data: publicProcedure
+      .input(z.object({ forceRefresh: z.boolean().optional() }).optional())
+      .query(async ({ input }) => {
+        try {
+          return await getVacantRooms(Boolean(input?.forceRefresh));
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_GATEWAY",
+            message: error instanceof Error ? error.message : "Couldn't load the room timetables right now.",
+            cause: error,
+          });
+        }
+      }),
+    refresh: publicProcedure.mutation(async () => {
+      try {
+        return await getVacantRooms(true);
+      } catch (error) {
+        throw new TRPCError({
+          code: "BAD_GATEWAY",
+          message: error instanceof Error ? error.message : "Couldn't refresh the room timetables right now.",
+          cause: error,
+        });
+      }
+    }),
+  }),
+
 });
 
 export type AppRouter = typeof appRouter;
