@@ -185,6 +185,39 @@ async function responseMessage(response: Response) {
   }
 }
 
+
+export type SubjectAttendanceRow = {
+  subject: string;
+  present: number;
+  absent: number;
+  markedTotal: number;
+  percentage: number | null;
+};
+
+/** Matches Android SubjectSummaryCard: group present/absent marks by subject, sort A–Z. */
+export function buildSubjectWiseSummaries(records: AttendanceRecord[], target: number): SubjectAttendanceRow[] {
+  const groups = new Map<string, AttendanceRecord[]>();
+  for (const record of records) {
+    if (record.status !== "present" && record.status !== "absent") continue;
+    const subject = (record.subject ?? "").trim() || "Unnamed subject";
+    const list = groups.get(subject) ?? [];
+    list.push(record);
+    groups.set(subject, list);
+  }
+  return Array.from(groups.entries())
+    .sort((a, b) => a[0].localeCompare(b[0], undefined, { sensitivity: "base" }))
+    .map(([subject, subjectRecords]) => {
+      const summary = calculateAttendanceSummary(subjectRecords, target);
+      return {
+        subject,
+        present: summary.present,
+        absent: summary.absent,
+        markedTotal: summary.markedTotal,
+        percentage: summary.percentage,
+      };
+    });
+}
+
 export function createAttendanceClient({ storage, fetcher = fetch }: { storage: StorageLike; fetcher?: FetchLike }) {
   function ensureProfileScope(profile: StudentProfile) {
     const scope = getAttendanceProfileScope(profile);
