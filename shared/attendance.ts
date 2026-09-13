@@ -1,5 +1,8 @@
 export type AttendanceStatus = "present" | "absent";
 
+export const ATTENDANCE_LECTURE_TYPES = ["lecture", "practical", "tutorial", "unspecified"] as const;
+export type AttendanceLectureType = (typeof ATTENDANCE_LECTURE_TYPES)[number];
+
 export type AttendanceRecord = {
   attendance_date: string;
   lecture_key: string;
@@ -9,6 +12,7 @@ export type AttendanceRecord = {
   venue: string | null;
   start_minutes: number;
   end_minutes: number;
+  lecture_type?: AttendanceLectureType | null;
   created_at: string;
   updated_at: string;
 };
@@ -69,4 +73,5 @@ export type AttendanceRecordInput = {
   venue: string;
   startMinutes: number;
   endMinutes: number;
+  lectureType?: AttendanceLectureType;
 };

@@ -1,6 +1,6 @@
 import type { Lecture } from "@shared/timetable";
 import type { StudentProfile } from "@shared/student-profile";
-import { ATTENDANCE_LEADERBOARD_SCOPES, type AttendanceHistory, type AttendanceLeaderboard, type AttendanceLeaderboardEntry, type AttendanceLeaderboardScope, type AttendanceRecord, type AttendanceRecordInput, type AttendanceSession, type AttendanceStatus, type AttendanceSummary } from "@shared/attendance";
+import { ATTENDANCE_LEADERBOARD_SCOPES, type AttendanceHistory, type AttendanceLeaderboard, type AttendanceLeaderboardEntry, type AttendanceLeaderboardScope, type AttendanceLectureType, type AttendanceRecord, type AttendanceRecordInput, type AttendanceSession, type AttendanceStatus, type AttendanceSummary } from "@shared/attendance";
 
 export const ATTENDANCE_INSTALLATION_KEY = "nextlecture:attendance:installation:v1";
 export const ATTENDANCE_SESSION_KEY = "nextlecture:attendance:session:v1";
@@ -138,7 +138,15 @@ export async function createLectureKey(attendanceDate: string, groupName: string
   ].join("|"));
 }
 
-export async function createAttendanceRecordInput(attendanceDate: string, groupName: string, lecture: Pick<Lecture, "startTime" | "endTime" | "subject" | "teacher" | "venue">, status: AttendanceStatus): Promise<AttendanceRecordInput> {
+export function normalizeAttendanceLectureType(value: string | null | undefined): AttendanceLectureType {
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (["p", "practical", "lab", "laboratory"].includes(normalized)) return "practical";
+  if (["t", "tutorial"].includes(normalized)) return "tutorial";
+  if (["l", "lecture", "theory"].includes(normalized)) return "lecture";
+  return "unspecified";
+}
+
+export async function createAttendanceRecordInput(attendanceDate: string, groupName: string, lecture: Pick<Lecture, "startTime" | "endTime" | "subject" | "teacher" | "venue" | "lectureType">, status: AttendanceStatus): Promise<AttendanceRecordInput> {
   return {
     attendanceDate,
     lectureKey: await createLectureKey(attendanceDate, groupName, lecture),
@@ -148,6 +156,7 @@ export async function createAttendanceRecordInput(attendanceDate: string, groupN
     venue: normalize(lecture.venue),
     startMinutes: timeToMinutes(lecture.startTime),
     endMinutes: timeToMinutes(lecture.endTime),
+    lectureType: normalizeAttendanceLectureType(lecture.lectureType),
   };
 }
 
@@ -192,6 +201,7 @@ export type SubjectAttendanceRow = {
   absent: number;
   markedTotal: number;
   percentage: number | null;
+  byType: Record<AttendanceLectureType, { present: number; absent: number; markedTotal: number; percentage: number | null }>;
 };
 
 /** Matches Android SubjectSummaryCard: group present/absent marks by subject, sort A–Z. */
@@ -208,12 +218,17 @@ export function buildSubjectWiseSummaries(records: AttendanceRecord[], target: n
     .sort((a, b) => a[0].localeCompare(b[0], undefined, { sensitivity: "base" }))
     .map(([subject, subjectRecords]) => {
       const summary = calculateAttendanceSummary(subjectRecords, target);
+      const byType = Object.fromEntries(["lecture", "practical", "tutorial", "unspecified"].map(type => {
+        const typeSummary = calculateAttendanceSummary(subjectRecords.filter(record => normalizeAttendanceLectureType(record.lecture_type) === type), target);
+        return [type, { present: typeSummary.present, absent: typeSummary.absent, markedTotal: typeSummary.markedTotal, percentage: typeSummary.percentage }];
+      })) as SubjectAttendanceRow["byType"];
       return {
         subject,
         present: summary.present,
         absent: summary.absent,
         markedTotal: summary.markedTotal,
         percentage: summary.percentage,
+        byType,
       };
     });
 }

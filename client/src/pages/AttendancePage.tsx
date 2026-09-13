@@ -40,7 +40,7 @@ function weekdayFor(date: Date): Weekday | null {
 
 function localRecordFromInput(input: AttendanceRecordInput): AttendanceRecord {
   const now = new Date().toISOString();
-  return { attendance_date: input.attendanceDate, lecture_key: input.lectureKey, status: input.status, subject: input.subject, teacher: input.teacher || null, venue: input.venue || null, start_minutes: input.startMinutes, end_minutes: input.endMinutes, created_at: now, updated_at: now };
+  return { attendance_date: input.attendanceDate, lecture_key: input.lectureKey, status: input.status, subject: input.subject, teacher: input.teacher || null, venue: input.venue || null, start_minutes: input.startMinutes, end_minutes: input.endMinutes, lecture_type: input.lectureType ?? "unspecified", created_at: now, updated_at: now };
 }
 
 export default function AttendancePage() {
