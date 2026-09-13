@@ -12,6 +12,7 @@ import PreviousPapersPage from "./pages/PreviousPapersPage";
 import AttendancePage from "./pages/AttendancePage";
 import DownloadPage from "./pages/DownloadPage";
 import VacantRoomsPage from "./pages/VacantRoomsPage";
+import CampusPage from "./pages/CampusPage";
 
 function Router() {
   return (
@@ -19,6 +20,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/app" component={TimetableApp} />
       <Route path="/vacant-rooms" component={VacantRoomsPage} />
+      <Route path="/campus" component={CampusPage} />
       <Route path="/attendance" component={AttendancePage} />
       <Route path="/syllabus" component={SyllabusPage} />
       <Route path="/papers" component={PreviousPapersPage} />

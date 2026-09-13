@@ -38,6 +38,12 @@ export const SYLLABUS_SOURCE_URL = "https://appsc.gndec.ac.in/sites/default/file
 export const PREVIOUS_YEAR_PAPERS_SOURCE_URL = "https://drive.google.com/drive/folders/11ywkOKyeixCPihsCzqZDyzy2msLXxx6w";
 
 /** Public API base path, retained as a clear configuration point for future API hosting changes. */
+/** Same holiday backend Android uses (HolidayManager). */
+export const HOLIDAY_API_BASE_URL = "https://gndec-pyq-rag-api-lsgzts-projects.vercel.app";
+
+/** Notices / ERP feed backend (ErpNoticeManager default). */
+export const NOTICES_API_BASE_URL = "https://gndec-pyq-rag-api.vercel.app";
+
 export const BACKEND_API_URL = "/api/trpc";
 
 export const TIMETABLE_CACHE_TTL_MS = 30 * 60 * 1000;

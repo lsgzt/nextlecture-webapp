@@ -1,5 +1,5 @@
 import type { Lecture, TimetableResponse } from "@shared/timetable";
-import { AlertCircle, ArrowLeft, BookOpenText, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, ClipboardCheck, Clock3, CloudOff, DoorOpen, ExternalLink, FileText, Info, LoaderCircle, MapPin, PencilLine, RefreshCw, Route, Search, UserRound } from "lucide-react";
+import { AlertCircle, ArrowLeft, BookOpenText, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, ClipboardCheck, Clock3, CloudOff, DoorOpen, ExternalLink, Megaphone, FileText, Info, LoaderCircle, MapPin, PencilLine, RefreshCw, Route, Search, UserRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -247,6 +247,16 @@ export default function TimetableApp() {
           <span className="min-w-0 flex-1 text-left">
             <span className="block font-semibold text-foreground">Find vacant rooms</span>
             <span className="mt-0.5 block text-sm text-muted-foreground">See which rooms are free right now or at any slot</span>
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5" />
+        </Link>
+        <Link href="/campus" className="group flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3.5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-teal-300 hover:bg-teal-50/50 hover:shadow-md active:scale-[0.99] dark:hover:border-teal-800 dark:hover:bg-teal-950/30">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-teal-50 text-teal-700 transition-transform duration-200 group-hover:scale-105 dark:bg-teal-950/45 dark:text-teal-300">
+            <Megaphone className="h-4 w-4" />
+          </span>
+          <span className="min-w-0 flex-1 text-left">
+            <span className="block font-semibold text-foreground">Notices & holidays</span>
+            <span className="mt-0.5 block text-sm text-muted-foreground">Official GNDEC notices and the holiday list</span>
           </span>
           <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5" />
         </Link>

@@ -10,6 +10,7 @@ import { getOfficialSyllabusDocument } from "./syllabus";
 import { getPreviousPapers, getPreviousPaperSessions } from "./previousPapers";
 import { recoverAndroidRegistrationNumber } from "./androidProfileRecovery";
 import { getVacantRooms } from "./vacantRooms";
+import { getHolidayFeed, getNoticeFeed } from "./campusFeeds";
 
 async function loadGroup(group: string, forceRefresh = false) {
   try {
@@ -179,6 +180,35 @@ export const appRouter = router({
         });
       }
     }),
+  }),
+
+  campus: router({
+    holidays: publicProcedure
+      .input(z.object({ forceRefresh: z.boolean().optional() }).optional())
+      .query(async ({ input }) => {
+        try {
+          return await getHolidayFeed(Boolean(input?.forceRefresh));
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_GATEWAY",
+            message: error instanceof Error ? error.message : "Couldn't load the official holiday list.",
+            cause: error,
+          });
+        }
+      }),
+    notices: publicProcedure
+      .input(z.object({ forceRefresh: z.boolean().optional() }).optional())
+      .query(async ({ input }) => {
+        try {
+          return await getNoticeFeed(Boolean(input?.forceRefresh));
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_GATEWAY",
+            message: error instanceof Error ? error.message : "Couldn't load official college notices.",
+            cause: error,
+          });
+        }
+      }),
   }),
 
 });
