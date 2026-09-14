@@ -1,9 +1,7 @@
 import crypto from "node:crypto";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
-import { eq, sql } from "drizzle-orm";
-import { fcmTokens, notificationState } from "../drizzle/schema";
-import { getDb } from "./db";
 import { getOfficialTimetable } from "./timetable";
 import { getNoticeFeed } from "./campusFeeds";
 
@@ -11,23 +9,15 @@ const ANNOUNCEMENTS_URL = "https://raw.githubusercontent.com/lsgzt/nextlecture-a
 const RELEASE_URL = "https://api.github.com/repos/lsgzt/nextlecture-android/releases/latest";
 
 type PushEvent = { id: string; type: string; title: string; body: string; url?: string };
+type NotificationDb = SupabaseClient;
 
-async function ensureNotificationTables() {
-  const db = await getDb();
-  if (!db) throw new Error("Database is not configured");
-  await db.execute(sql.raw(`CREATE TABLE IF NOT EXISTS fcm_tokens (
-    token varchar(4096) NOT NULL PRIMARY KEY,
-    platform varchar(32) NOT NULL DEFAULT 'android',
-    appVersion varchar(64),
-    active int NOT NULL DEFAULT 1,
-    lastSeenAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-  )`));
-  await db.execute(sql.raw(`CREATE TABLE IF NOT EXISTS notification_state (
-    \`key\` varchar(128) NOT NULL PRIMARY KEY,
-    fingerprint varchar(128) NOT NULL,
-    updatedAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-  )`));
+function getNotificationDb(): NotificationDb {
+  const url = process.env.SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!url || !key) throw new Error("Supabase notification database is not configured");
+  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
 }
+
 function hash(value: unknown) {
   return crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
@@ -47,41 +37,36 @@ function getFirebaseMessaging() {
 export async function registerFcmToken(input: { token: string; platform?: string; appVersion?: string }) {
   const token = input.token.trim();
   if (token.length < 50 || token.length > 4096) throw new Error("Invalid FCM token");
-  await ensureNotificationTables();
-  const db = await getDb();
-  if (!db) throw new Error("Database is not configured");
-  await db.insert(fcmTokens).values({
+  const db = getNotificationDb();
+  const { error } = await db.from("fcm_tokens").upsert({
     token,
     platform: input.platform?.trim().slice(0, 32) || "android",
-    appVersion: input.appVersion?.trim().slice(0, 64) || null,
-    active: 1,
-  }).onDuplicateKeyUpdate({ set: {
-    platform: input.platform?.trim().slice(0, 32) || "android",
-    appVersion: input.appVersion?.trim().slice(0, 64) || null,
-    active: 1,
-    lastSeenAt: new Date(),
-  } });
+    app_version: input.appVersion?.trim().slice(0, 64) || null,
+    active: true,
+    last_seen_at: new Date().toISOString(),
+  }, { onConflict: "token" });
+  if (error) throw new Error(`FCM token registration failed: ${error.message}`);
 }
 
 async function getTokens() {
-  await ensureNotificationTables();
-  const db = await getDb();
-  if (!db) return [] as string[];
-  const rows = await db.select({ token: fcmTokens.token }).from(fcmTokens).where(eq(fcmTokens.active, 1)).limit(10000);
-  return rows.map(row => row.token);
+  const db = getNotificationDb();
+  const { data, error } = await db.from("fcm_tokens").select("token").eq("active", true).limit(10000);
+  if (error) throw new Error(`FCM token lookup failed: ${error.message}`);
+  return (data ?? []).map(row => row.token as string);
 }
 
 async function wasAlreadySent(key: string, fingerprint: string) {
-  await ensureNotificationTables();
-  const db = await getDb();
-  if (!db) return true;
-  const existing = await db.select({ fingerprint: notificationState.fingerprint }).from(notificationState).where(eq(notificationState.key, key)).limit(1);
-  if (!existing.length) {
-    await db.insert(notificationState).values({ key, fingerprint });
+  const db = getNotificationDb();
+  const { data, error } = await db.from("notification_state").select("fingerprint").eq("key", key).maybeSingle();
+  if (error) throw new Error(`Notification state lookup failed: ${error.message}`);
+  if (!data) {
+    const inserted = await db.from("notification_state").insert({ key, fingerprint });
+    if (inserted.error) throw new Error(`Notification state insert failed: ${inserted.error.message}`);
     return true;
   }
-  if (existing[0]?.fingerprint === fingerprint) return true;
-  await db.insert(notificationState).values({ key, fingerprint }).onDuplicateKeyUpdate({ set: { fingerprint, updatedAt: new Date() } });
+  if (data.fingerprint === fingerprint) return true;
+  const updated = await db.from("notification_state").update({ fingerprint, updated_at: new Date().toISOString() }).eq("key", key);
+  if (updated.error) throw new Error(`Notification state update failed: ${updated.error.message}`);
   return false;
 }
 
@@ -90,6 +75,7 @@ async function sendEvent(event: PushEvent) {
   if (!tokens.length) return { sent: false, reason: "no tokens" };
   if (await wasAlreadySent(event.type, hash(event.id))) return { sent: false, reason: "unchanged" };
   const messaging = getFirebaseMessaging();
+  const db = getNotificationDb();
   let sent = 0;
   for (let offset = 0; offset < tokens.length; offset += 500) {
     const batch = tokens.slice(offset, offset + 500);
@@ -100,13 +86,10 @@ async function sendEvent(event: PushEvent) {
       android: { priority: "high", notification: { channelId: "timetable_updates_v2", clickAction: "OPEN_APP" } },
     })));
     sent += response.successCount;
-    const db = await getDb();
-    if (db) {
-      for (let index = 0; index < response.responses.length; index += 1) {
-        const failure = response.responses[index].error;
-        if (failure?.code === "messaging/registration-token-not-registered" || failure?.code === "messaging/invalid-registration-token") {
-          await db.update(fcmTokens).set({ active: 0 }).where(eq(fcmTokens.token, batch[index]));
-        }
+    for (let index = 0; index < response.responses.length; index += 1) {
+      const failure = response.responses[index].error;
+      if (failure?.code === "messaging/registration-token-not-registered" || failure?.code === "messaging/invalid-registration-token") {
+        await db.from("fcm_tokens").update({ active: false }).eq("token", batch[index]);
       }
     }
   }
@@ -117,13 +100,7 @@ export async function sendCustomNotification(input: { id?: string; title: string
   const title = input.title.trim().slice(0, 200);
   const body = input.body.trim().slice(0, 2000);
   if (!title || !body) throw new Error("title and body are required");
-  return sendEvent({
-    id: input.id?.trim() || hash({ title, body }),
-    type: "custom",
-    title,
-    body,
-    url: input.url?.trim().slice(0, 1000),
-  });
+  return sendEvent({ id: input.id?.trim() || hash({ title, body }), type: "custom", title, body, url: input.url?.trim().slice(0, 1000) });
 }
 
 async function latestAnnouncement(): Promise<PushEvent | null> {
@@ -137,17 +114,13 @@ async function latestAnnouncement(): Promise<PushEvent | null> {
 export async function runNotificationCheck() {
   const results: Record<string, unknown> = {};
   const [timetable, notices, announcement, release] = await Promise.all([
-    getOfficialTimetable(true),
-    getNoticeFeed(true),
-    latestAnnouncement(),
+    getOfficialTimetable(true), getNoticeFeed(true), latestAnnouncement(),
     fetch(RELEASE_URL, { headers: { Accept: "application/vnd.github+json", "User-Agent": "NextLecture-notifier" }, signal: AbortSignal.timeout(15_000) }).then(async response => response.ok ? response.json() as Promise<{ tag_name?: string; name?: string; body?: string; draft?: boolean; prerelease?: boolean }> : null),
   ]);
   results.timetable = await sendEvent({ id: hash(timetable.cache.data), type: "timetable", title: "Timetable updated", body: "The official GNDEC timetable has changed. Open NextLecture to refresh your schedule." });
   const notice = notices.notices[0];
   if (notice) results.notice = await sendEvent({ id: notice.id, type: "notice", title: "New college notice", body: notice.title, url: notice.url });
   if (announcement) results.announcement = await sendEvent(announcement);
-  if (release && release.tag_name && !release.draft && !release.prerelease) {
-    results.release = await sendEvent({ id: release.tag_name, type: "app_update", title: release.name || `NextLecture ${release.tag_name}`, body: "A new app update is available. Tap to download it." });
-  }
+  if (release && release.tag_name && !release.draft && !release.prerelease) results.release = await sendEvent({ id: release.tag_name, type: "app_update", title: release.name || `NextLecture ${release.tag_name}`, body: "A new app update is available. Tap to download it." });
   return results;
 }
