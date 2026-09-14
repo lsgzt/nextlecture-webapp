@@ -26,5 +26,19 @@ export const timetableCache = mysqlTable("timetable_cache", {
   fetchedAt: timestamp("fetchedAt").notNull(),
 });
 
+export const fcmTokens = mysqlTable("fcm_tokens", {
+  token: varchar("token", { length: 4096 }).primaryKey(),
+  platform: varchar("platform", { length: 32 }).notNull().default("android"),
+  appVersion: varchar("appVersion", { length: 64 }),
+  active: int("active").notNull().default(1),
+  lastSeenAt: timestamp("lastSeenAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const notificationState = mysqlTable("notification_state", {
+  key: varchar("key", { length: 128 }).primaryKey(),
+  fingerprint: varchar("fingerprint", { length: 128 }).notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;

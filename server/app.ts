@@ -7,6 +7,7 @@ import { registerStorageProxy } from "./_core/storageProxy";
 import { getOfficialSyllabusPdfBuffer } from "./syllabus";
 import { createServerFallbackGeminiResponse, getConfiguredGeminiApiKey } from "./syllabusGemini";
 import { createAttendanceProxyHandler } from "./attendanceProxy";
+import { registerFcmToken, runNotificationCheck } from "./notifications";
 
 /**
  * Creates the shared HTTP application for local hosting and serverless adapters.
@@ -20,6 +21,32 @@ export function createApp() {
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   app.use("/api/attendance", createAttendanceProxyHandler());
+  app.post("/api/notifications/register", async (req, res) => {
+    try {
+      await registerFcmToken({
+        token: typeof req.body?.token === "string" ? req.body.token : "",
+        platform: typeof req.body?.platform === "string" ? req.body.platform : undefined,
+        appVersion: typeof req.body?.appVersion === "string" ? req.body.appVersion : undefined,
+      });
+      res.status(204).end();
+    } catch (error) {
+      res.status(400).json({ message: error instanceof Error ? error.message : "Could not register notification token" });
+    }
+  });
+  app.all("/api/notifications/cron", async (req, res) => {
+    const expected = process.env.NOTIFICATION_CRON_SECRET;
+    const supplied = req.header("authorization")?.replace(/^Bearer\s+/i, "") || req.header("x-cron-secret");
+    if (expected && supplied !== expected) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    try {
+      res.json(await runNotificationCheck());
+    } catch (error) {
+      console.error("[Notifications] check failed:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Notification check failed" });
+    }
+  });
   app.get("/api/syllabus.pdf", async (_req, res) => {
     try {
       const syllabus = await getOfficialSyllabusPdfBuffer();
