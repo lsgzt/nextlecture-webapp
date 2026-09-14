@@ -38,3 +38,24 @@ export function getStudentProfileDetailFields(profile: StudentProfile): StudentP
     { label: "Venue", value: profile.venue },
   ];
 }
+
+/** Frontend-only CR recognition (no backend involvement). */
+const CLASS_REPRESENTATIVES: Array<{ name: string; branch: string }> = [
+  { name: "imtoz kaur", branch: "IT" },
+];
+
+function normalizePersonName(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/**
+ * Whether this saved profile should show the exclusive Class Representative badge.
+ * Matched by student name + branch on the client only.
+ */
+export function isClassRepresentative(profile: Pick<StudentProfile, "studentName" | "branch">): boolean {
+  const name = normalizePersonName(profile.studentName);
+  const branch = profile.branch.trim().toUpperCase();
+  return CLASS_REPRESENTATIVES.some(
+    entry => entry.name === name && entry.branch === branch,
+  );
+}

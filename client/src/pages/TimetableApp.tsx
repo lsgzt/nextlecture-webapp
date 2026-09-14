@@ -1,5 +1,5 @@
 import type { Lecture, TimetableResponse } from "@shared/timetable";
-import { AlertCircle, ArrowLeft, BookOpenText, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, ClipboardCheck, Clock3, CloudOff, DoorOpen, ExternalLink, Megaphone, FileText, Info, LoaderCircle, MapPin, PencilLine, RefreshCw, Route, Search, UserRound } from "lucide-react";
+import { AlertCircle, ArrowLeft, BookOpenText, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, ClipboardCheck, Clock3, CloudOff, DoorOpen, ExternalLink, Megaphone, FileText, Info, LoaderCircle, MapPin, PencilLine, RefreshCw, Route, Search, UserRound, Award } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -7,7 +7,7 @@ import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 import { Expandable } from "@/components/Expandable";
 import { StudentProfileSetup } from "@/components/StudentProfileSetup";
 import { trpc } from "@/lib/trpc";
-import { getStudentProfileDetailFields, getStudentProfileSubtitle } from "@/lib/student-profile-display";
+import { getStudentProfileDetailFields, getStudentProfileSubtitle, isClassRepresentative } from "@/lib/student-profile-display";
 import { getPreferredTimetableGroup } from "@/lib/timetable-selection";
 import { DAY_ORDER, deriveGroupParts, formatLectureType, getTimeParts, getDayLabel, getLecturesForDay, getNextLecture, getTodayLectures, getTomorrowLectures, humanizeDuration, lectureStatus, timeToMinutes } from "@/lib/timetable-ui";
 import { readStoredStudentProfile, saveStudentProfile as persistStudentProfile } from "@/lib/student-profile-storage";
@@ -277,7 +277,15 @@ export default function TimetableApp() {
           <button type="button" aria-expanded={isProfileExpanded} aria-controls="full-student-profile" onClick={() => setIsProfileExpanded(current => !current)} className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-muted/40">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-teal-50 text-teal-700 dark:bg-teal-950/45 dark:text-teal-300"><UserRound className="h-4 w-4" /></span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate font-semibold text-foreground">{studentProfile.studentName}</span>
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="truncate font-semibold text-foreground">{studentProfile.studentName}</span>
+                {isClassRepresentative(studentProfile) && (
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-gradient-to-r from-amber-500 to-rose-500 px-2 py-0.5 text-[0.62rem] font-bold tracking-[0.06em] text-white shadow-sm shadow-amber-900/20">
+                    <Award className="h-3 w-3" aria-hidden="true" />
+                    CR
+                  </span>
+                )}
+              </span>
               <span className="mt-0.5 block truncate text-sm text-muted-foreground">CRN {studentProfile.crn}{studentProfile.subsection ? ` · ${studentProfile.subsection}` : studentProfile.section ? ` · ${studentProfile.section}` : ""}</span>
             </span>
             <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300 ease-out ${isProfileExpanded ? "rotate-180" : ""}`} />
