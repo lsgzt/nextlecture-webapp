@@ -2,7 +2,13 @@
  * Product settings deliberately kept in one place.
  * Replace ANDROID_APP_URL when the downloadable Android APK is ready.
  */
-export const ANDROID_APP_URL = "https://github.com/lsgzt/nextlecture-android/releases/latest/download/gndec-timetable.apk";
+/** Direct APK asset for the current release (name changes between versions). */
+export const ANDROID_APP_URL =
+  "https://github.com/lsgzt/nextlecture-android/releases/download/2.4.36/NextLecture-2.4.36.apk";
+
+/** GitHub API used to resolve the latest .apk asset name dynamically. */
+export const ANDROID_RELEASES_API_URL =
+  "https://api.github.com/repos/lsgzt/nextlecture-android/releases/latest";
 
 /** Publicly served logo assets used by deployed headers and device icon metadata. */
 export const BRAND_LOGO_URL = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663345189289/xrndoJiVzCLAnaSr.png";
