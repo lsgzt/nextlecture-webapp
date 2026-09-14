@@ -42,6 +42,7 @@ export function getStudentProfileDetailFields(profile: StudentProfile): StudentP
 /** Frontend-only CR recognition (no backend involvement). */
 const CLASS_REPRESENTATIVES: Array<{ name: string; branch: string }> = [
   { name: "imtoz kaur", branch: "IT" },
+  { name: "jaswant singh", branch: "IT" },
 ];
 
 function normalizePersonName(value: string) {
