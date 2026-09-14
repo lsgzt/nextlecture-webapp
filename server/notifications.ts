@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
-import { and, eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { fcmTokens, notificationState } from "../drizzle/schema";
 import { getDb } from "./db";
 import { getOfficialTimetable } from "./timetable";
@@ -12,6 +12,22 @@ const RELEASE_URL = "https://api.github.com/repos/lsgzt/nextlecture-android/rele
 
 type PushEvent = { id: string; type: string; title: string; body: string; url?: string };
 
+async function ensureNotificationTables() {
+  const db = await getDb();
+  if (!db) throw new Error("Database is not configured");
+  await db.execute(sql.raw(`CREATE TABLE IF NOT EXISTS fcm_tokens (
+    token varchar(4096) NOT NULL PRIMARY KEY,
+    platform varchar(32) NOT NULL DEFAULT 'android',
+    appVersion varchar(64),
+    active int NOT NULL DEFAULT 1,
+    lastSeenAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  )`));
+  await db.execute(sql.raw(`CREATE TABLE IF NOT EXISTS notification_state (
+    \`key\` varchar(128) NOT NULL PRIMARY KEY,
+    fingerprint varchar(128) NOT NULL,
+    updatedAt timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  )`));
+}
 function hash(value: unknown) {
   return crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
@@ -31,6 +47,7 @@ function getFirebaseMessaging() {
 export async function registerFcmToken(input: { token: string; platform?: string; appVersion?: string }) {
   const token = input.token.trim();
   if (token.length < 50 || token.length > 4096) throw new Error("Invalid FCM token");
+  await ensureNotificationTables();
   const db = await getDb();
   if (!db) throw new Error("Database is not configured");
   await db.insert(fcmTokens).values({
@@ -47,6 +64,7 @@ export async function registerFcmToken(input: { token: string; platform?: string
 }
 
 async function getTokens() {
+  await ensureNotificationTables();
   const db = await getDb();
   if (!db) return [] as string[];
   const rows = await db.select({ token: fcmTokens.token }).from(fcmTokens).where(eq(fcmTokens.active, 1)).limit(10000);
@@ -54,6 +72,7 @@ async function getTokens() {
 }
 
 async function wasAlreadySent(key: string, fingerprint: string) {
+  await ensureNotificationTables();
   const db = await getDb();
   if (!db) return true;
   const existing = await db.select({ fingerprint: notificationState.fingerprint }).from(notificationState).where(eq(notificationState.key, key)).limit(1);
@@ -92,6 +111,19 @@ async function sendEvent(event: PushEvent) {
     }
   }
   return { sent };
+}
+
+export async function sendCustomNotification(input: { id?: string; title: string; body: string; url?: string }) {
+  const title = input.title.trim().slice(0, 200);
+  const body = input.body.trim().slice(0, 2000);
+  if (!title || !body) throw new Error("title and body are required");
+  return sendEvent({
+    id: input.id?.trim() || hash({ title, body }),
+    type: "custom",
+    title,
+    body,
+    url: input.url?.trim().slice(0, 1000),
+  });
 }
 
 async function latestAnnouncement(): Promise<PushEvent | null> {

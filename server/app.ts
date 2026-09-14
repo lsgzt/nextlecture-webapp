@@ -7,7 +7,7 @@ import { registerStorageProxy } from "./_core/storageProxy";
 import { getOfficialSyllabusPdfBuffer } from "./syllabus";
 import { createServerFallbackGeminiResponse, getConfiguredGeminiApiKey } from "./syllabusGemini";
 import { createAttendanceProxyHandler } from "./attendanceProxy";
-import { registerFcmToken, runNotificationCheck } from "./notifications";
+import { registerFcmToken, runNotificationCheck, sendCustomNotification } from "./notifications";
 
 /**
  * Creates the shared HTTP application for local hosting and serverless adapters.
@@ -45,6 +45,19 @@ export function createApp() {
     } catch (error) {
       console.error("[Notifications] check failed:", error instanceof Error ? error.message : error);
       res.status(500).json({ message: "Notification check failed" });
+    }
+  });
+  app.post("/api/notifications/send", async (req, res) => {
+    const expected = process.env.NOTIFICATION_CRON_SECRET;
+    const supplied = req.header("authorization")?.replace(/^Bearer\s+/i, "") || req.header("x-cron-secret");
+    if (!expected || supplied !== expected) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    try {
+      res.json(await sendCustomNotification(req.body ?? {}));
+    } catch (error) {
+      res.status(400).json({ message: error instanceof Error ? error.message : "Could not send notification" });
     }
   });
   app.get("/api/syllabus.pdf", async (_req, res) => {
