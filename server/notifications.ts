@@ -57,6 +57,10 @@ async function wasAlreadySent(key: string, fingerprint: string) {
   const db = await getDb();
   if (!db) return true;
   const existing = await db.select({ fingerprint: notificationState.fingerprint }).from(notificationState).where(eq(notificationState.key, key)).limit(1);
+  if (!existing.length) {
+    await db.insert(notificationState).values({ key, fingerprint });
+    return true;
+  }
   if (existing[0]?.fingerprint === fingerprint) return true;
   await db.insert(notificationState).values({ key, fingerprint }).onDuplicateKeyUpdate({ set: { fingerprint, updatedAt: new Date() } });
   return false;
