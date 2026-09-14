@@ -1,4 +1,4 @@
-import { ANDROID_APP_URL, BRAND_LOGO_URL } from "@shared/config";
+import { BRAND_LOGO_URL } from "@shared/config";
 import { startAndroidApkDownload } from "@/lib/android-download";
 import {
   ArrowLeft,
@@ -15,7 +15,6 @@ import {
   Trophy,
   ClipboardCheck,
 } from "lucide-react";
-import { useState } from "react";
 import { Link } from "wouter";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AnnouncementBanner } from "@/components/AnnouncementBanner";
@@ -92,7 +91,7 @@ export default function DownloadPage() {
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <button
                 type="button"
-                onClick={() => { void startAndroidApkDownload(); }}
+                onClick={() => startAndroidApkDownload()}
                 className="inline-flex min-h-12 items-center justify-center gap-2.5 rounded-xl bg-white px-6 text-base font-semibold text-teal-900 shadow-md transition hover:-translate-y-0.5 hover:bg-teal-50 active:scale-[0.97]"
               >
                 <Download className="h-5 w-5" aria-hidden="true" />
@@ -186,7 +185,7 @@ export default function DownloadPage() {
           </ul>
           <button
             type="button"
-            onClick={() => { void startAndroidApkDownload(); }}
+            onClick={() => startAndroidApkDownload()}
             className="mt-7 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-teal-700 px-5 text-sm font-semibold text-white transition hover:bg-teal-800 active:scale-[0.97]"
           >
             <Download className="h-4 w-4" aria-hidden="true" />

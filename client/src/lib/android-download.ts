@@ -1,46 +1,25 @@
-import { ANDROID_APP_URL, ANDROID_RELEASES_API_URL } from "@shared/config";
-
-const APK_FILENAME_FALLBACK = "NextLecture.apk";
+import { ANDROID_APP_URL } from "@shared/config";
 
 /**
- * Resolve the current APK asset from GitHub Releases (asset names change per version).
- * Falls back to ANDROID_APP_URL when the API is unreachable.
+ * Start the Android APK download without opening a new tab or leaving the page.
+ * A hidden iframe loads the release asset URL; GitHub responds with
+ * Content-Disposition: attachment so the browser saves the file in place.
  */
-async function resolveApkDownloadUrl(): Promise<string> {
-  try {
-    const response = await fetch(ANDROID_RELEASES_API_URL, {
-      headers: { Accept: "application/vnd.github+json" },
-      cache: "no-store",
-    });
-    if (!response.ok) return ANDROID_APP_URL;
-    const payload = (await response.json()) as {
-      assets?: Array<{ name?: string; browser_download_url?: string }>;
-    };
-    const asset = (payload.assets ?? []).find(
-      item => typeof item.name === "string" && item.name.toLowerCase().endsWith(".apk") && typeof item.browser_download_url === "string",
-    );
-    return asset?.browser_download_url || ANDROID_APP_URL;
-  } catch {
-    return ANDROID_APP_URL;
-  }
+export function startAndroidApkDownload() {
+  if (typeof document === "undefined") return;
+
+  // Remove any previous download frame.
+  document.getElementById("nextlecture-apk-download-frame")?.remove();
+
+  const iframe = document.createElement("iframe");
+  iframe.id = "nextlecture-apk-download-frame";
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.tabIndex = -1;
+  iframe.style.cssText = "position:fixed;width:0;height:0;border:0;opacity:0;pointer-events:none;left:-9999px;top:-9999px";
+  iframe.src = ANDROID_APP_URL;
+  document.body.appendChild(iframe);
+
+  window.setTimeout(() => {
+    iframe.remove();
+  }, 120_000);
 }
-
-/**
- * Start the Android APK download in the current tab.
- * Hidden iframes are blocked by GitHub (X-Frame-Options) and fail silently on mobile.
- */
-export async function startAndroidApkDownload() {
-  if (typeof window === "undefined") return;
-
-  const url = await resolveApkDownloadUrl();
-
-  // Same-tab navigation reliably triggers the browser download for APK assets.
-  // Cross-origin `download` attributes are ignored; location assign is the robust path.
-  window.location.assign(url);
-}
-
-export function getAndroidApkFallbackUrl() {
-  return ANDROID_APP_URL;
-}
-
-export { APK_FILENAME_FALLBACK };
