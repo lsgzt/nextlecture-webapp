@@ -39,7 +39,7 @@ function writeDismissedIds(ids: Set<string>) {
   }
 }
 
-/** Lightweight markdown subset matching Android: **bold**, *italic*/_italic_, [label](url), bare https URLs. */
+/** Lightweight markdown subset matching Android: bold, italic, links, and bare URLs. */
 function renderAnnouncementMessage(message: string): ReactNode {
   const lines = message.split("\n");
   return lines.map((line, lineIndex) => (
