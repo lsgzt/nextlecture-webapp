@@ -36,6 +36,7 @@ export function getStudentProfileDetailFields(profile: StudentProfile): StudentP
     { label: "Mentor name", value: profile.mentorName },
     { label: "Mentor mobile", value: profile.mentorMobileNumber },
     { label: "Venue", value: profile.venue },
+    { label: "Class coordinator", value: profile.classCoordinator ?? null },
   ];
 }
 

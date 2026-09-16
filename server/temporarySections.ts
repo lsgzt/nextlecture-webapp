@@ -23,8 +23,8 @@ type TemporarySectionFetchResult = {
 };
 
 const REQUEST_TIMEOUT_MS = 25_000;
-/** Bumped when official PDF column layout changed (Registration No. added). */
-const CACHE_PREFIX = "official-gnedc-permanent-section-2026-v2";
+/** Bumped when official PDF column layout changed (Class Coordinator added, column reorder Sep 2026). */
+const CACHE_PREFIX = "official-gnedc-permanent-section-2026-v3";
 const PDF_RANGE_CHUNK_BYTES = 128 * 1024;
 const PDF_RANGE_CONCURRENCY = 8;
 const PDF_RANGE_TIMEOUT_MS = 25_000;
@@ -34,22 +34,22 @@ const inMemoryCache = new Map<TemporarySectionBranch, TemporarySectionCacheEnvel
 const inFlightRefresh = new Map<TemporarySectionBranch, Promise<TemporarySectionCacheEnvelope>>();
 
 /**
- * Column x-starts for the revised 2026 permanent-section PDFs (13 columns):
- * S.No. | College Roll No. (CRN) | Registration No. | Student Name | Father Name |
- * Mother Name | Branch | Section | Subsection | Mentoring Group | Mentor Name |
- * Mentor's Mobile No. | Venue
+ * Column x-starts for the September 2026 permanent-section PDFs (12 physical slots;
+ * CRN+Branch and Mobile+Venue are often merged in a single text item and split later):
+ * Sr.No. | Registration No. | CRN + Branch | Student Name | Mother Name | Father Name |
+ * Section | Subsection | Mentoring Group | Mentor Name | Mobile + Venue | Class Coordinator
  */
-const PERMANENT_SECTION_COLUMN_STARTS = [0, 40, 75, 115, 220, 320, 415, 450, 485, 530, 580, 675, 730];
+const PERMANENT_SECTION_COLUMN_STARTS = [0, 20, 60, 110, 210, 290, 385, 410, 440, 485, 575, 690];
 
-/** Canonical official PDF URLs for August 2026 permanent sections (preferred over page discovery). */
+/** Canonical official PDF URLs for September 2026 permanent sections (preferred over page discovery). */
 const BRANCH_DOCUMENT_URLS: Record<TemporarySectionBranch, string> = {
-  CE: "https://appsc.gndec.ac.in/sites/default/files/2026-08/CE%20Permanent%20Sections%202026_0.pdf",
-  CS: "https://appsc.gndec.ac.in/sites/default/files/2026-08/CS%20Permanent%20Sections%202026_0.pdf",
-  EC: "https://appsc.gndec.ac.in/sites/default/files/2026-08/EC%20Permanent%20Sections%202026_1.pdf",
-  EE: "https://appsc.gndec.ac.in/sites/default/files/2026-08/EE%20Permanent%20Sections%202026_0.pdf",
-  IT: "https://appsc.gndec.ac.in/sites/default/files/2026-08/IT%20Permanent%20Sections%202026_0.pdf",
-  ME: "https://appsc.gndec.ac.in/sites/default/files/2026-08/ME%20Permanent%20Sections%202026_0.pdf",
-  RAI: "https://appsc.gndec.ac.in/sites/default/files/2026-08/RAI%20Permanent%20Sections%202026_1.pdf",
+  CE: "https://appsc.gndec.ac.in/sites/default/files/2026-09/CE%20Permanent%20Section%2015_09_2026.pdf",
+  CS: "https://appsc.gndec.ac.in/sites/default/files/2026-09/CS%20Permanent%20Section%2015_09_2026.pdf",
+  EC: "https://appsc.gndec.ac.in/sites/default/files/2026-09/EC%20Permanent%20Section%2015_09_2026.pdf",
+  EE: "https://appsc.gndec.ac.in/sites/default/files/2026-09/EE%20Permanent%20Section%2015_09_2026.pdf",
+  IT: "https://appsc.gndec.ac.in/sites/default/files/2026-09/IT%20Permanent%20Section%2015_09_2026.pdf",
+  ME: "https://appsc.gndec.ac.in/sites/default/files/2026-09/ME%20Permanent%20Section%2015_09_2026_0.pdf",
+  RAI: "https://appsc.gndec.ac.in/sites/default/files/2026-09/RAI%20Permanent%20Section%2015_09_2026.pdf",
 };
 
 type PdfTextItem = { str?: string; transform?: number[] };
@@ -84,43 +84,76 @@ function isValidEnvelope(value: unknown): value is TemporarySectionCacheEnvelope
 }
 
 /**
- * Parses column-delimited text reconstructed from the source's revised 2026 permanent-section tables.
- * Layout: S.No., CRN, Registration No., Student Name, Father, Mother, Branch, Section, Subsection,
- * Mentoring Group, Mentor Name, Mobile, Venue. Serial number is discarded; CRN is the roll number.
- * Registration number is captured so it is not incorrectly prepended to the student name.
+ * Split a cell that often merges CRN + Branch (e.g. "2621001 IT" or "2621001IT").
+ * Returns [crn, branch] or [null, null] when the pattern does not match.
+ */
+function splitCrnAndBranch(value: string): [string | null, string | null] {
+  const normalized = normalizeText(value);
+  const match = normalized.match(/^(\d{6,10})\s*([A-Z]{2,4})$/i);
+  if (!match) return [null, null];
+  return [match[1], match[2].toUpperCase()];
+}
+
+/**
+ * Split a cell that often merges Mentor mobile + Venue (e.g. "9814828414 S213" or "9814828414S213").
+ */
+function splitMobileAndVenue(value: string): [string | null, string | null] {
+  const normalized = normalizeText(value);
+  const match = normalized.match(/^(\d{10})\s*([A-Z0-9\-]+)$/i);
+  if (match) return [match[1], match[2]];
+  if (/^\d{10}$/.test(normalized)) return [normalized, null];
+  if (/^[A-Z0-9\-]+$/i.test(normalized) && !/^\d+$/.test(normalized)) return [null, normalized];
+  return [normalized || null, null];
+}
+
+/**
+ * Parses column-delimited text reconstructed from the September 2026 permanent-section tables.
+ * Layout: Sr.No., Registration No., CRN+Branch, Student Name, Mother Name, Father Name,
+ * Section, Subsection, Mentoring Group, Mentor Name, Mobile+Venue, Class Coordinator.
+ * Serial number is discarded; CRN is the roll number. Registration and Class Coordinator are captured.
  */
 export function parseTemporarySectionText(text: string, expectedBranch: TemporarySectionBranch, sourceUrl: string) {
   const students: StudentProfile[] = [];
   for (const rawLine of text.split(/\r?\n/)) {
     const columns = rawLine.split("\t").map(normalizeText);
-    if (columns.length < 13) continue;
+    // Need at least the core fields; class coordinator is optional trailing column.
+    if (columns.length < 11) continue;
 
     const [
       ,
-      crn,
       registrationNumber,
+      crnBranchCell,
       studentName,
-      fatherName,
       motherName,
-      branch,
+      fatherName,
       section,
       subsection,
       mentoringGroup,
       mentorName,
-      mentorMobileNumber,
-      venue,
+      mobileVenueCell,
+      classCoordinator,
     ] = columns;
 
-    if (!/^\d{6,16}$/.test(crn) || !studentName || !branch || !section || !subsection) continue;
-    // Reject rows where registration leaked into the name field (old parser / wrong columns).
+    const [crn, branchFromCell] = splitCrnAndBranch(crnBranchCell);
+    // Fallback: some extractions put CRN and Branch in separate cells (legacy layout residual).
+    let crnFinal = crn;
+    let branchFinal = branchFromCell;
+    if (!crnFinal && /^\d{6,16}$/.test(crnBranchCell)) {
+      crnFinal = crnBranchCell;
+      // Branch might sit in a following empty slot in older layouts; not expected here.
+    }
+    if (!crnFinal || !studentName || !section || !subsection) continue;
+    // Reject rows where registration leaked into the name field.
     if (/^\d{6,16}\s/.test(studentName) || /^\d{6,16}$/.test(studentName)) continue;
 
-    const recordBranch = branch.toUpperCase();
+    const recordBranch = (branchFinal ?? expectedBranch).toUpperCase();
     if (recordBranch !== expectedBranch) continue;
+
+    const [mentorMobileNumber, venue] = splitMobileAndVenue(mobileVenueCell ?? "");
 
     students.push({
       studentName,
-      crn,
+      crn: crnFinal,
       registrationNumber: /^\d{6,16}$/.test(registrationNumber) ? registrationNumber : null,
       fatherName: fatherName || null,
       motherName: motherName || null,
@@ -131,6 +164,7 @@ export function parseTemporarySectionText(text: string, expectedBranch: Temporar
       mentorName: mentorName || null,
       mentorMobileNumber: mentorMobileNumber || null,
       venue: venue || null,
+      classCoordinator: classCoordinator || null,
       source: "official",
       sourceUrl,
       savedAt: Date.now(),
@@ -328,6 +362,26 @@ async function getKnownCache(branch: TemporarySectionBranch) {
   return persistent;
 }
 
+/** Drop in-memory + persistent cache for a branch (and legacy v2 keys) so the next fetch is clean. */
+async function clearStoredCache(branch: TemporarySectionBranch) {
+  inMemoryCache.delete(branch);
+  const db = await getDb();
+  if (!db) return;
+  const keys = [
+    cacheKey(branch),
+    // Legacy prefixes so force-refresh fully invalidates older layouts.
+    `official-gnedc-permanent-section-2026-v2:${branch}`,
+    `official-gnedc-permanent-section-2026-v1:${branch}`,
+  ];
+  try {
+    for (const id of keys) {
+      await db.delete(timetableCache).where(eq(timetableCache.id, id));
+    }
+  } catch (error) {
+    console.warn("[Temporary sections] Persistent cache could not be cleared:", error);
+  }
+}
+
 async function refreshCache(branch: TemporarySectionBranch) {
   const existing = inFlightRefresh.get(branch);
   if (existing) return existing;
@@ -353,7 +407,11 @@ export async function getOfficialTemporarySections(branchInput: string, forceRef
   const branch = normalizeText(branchInput).toUpperCase();
   if (!isBranch(branch)) throw new Error(`Temporary-section lookup is not available for ${branchInput || "this branch"}.`);
 
-  const previousCache = await getKnownCache(branch);
+  if (forceRefresh) {
+    await clearStoredCache(branch);
+  }
+
+  const previousCache = forceRefresh ? null : await getKnownCache(branch);
   const fresh = previousCache && Date.now() - previousCache.fetchedAt < TEMPORARY_SECTION_CACHE_TTL_MS;
   if (!forceRefresh && fresh) return { cache: previousCache, freshness: "fresh", updateError: null };
 
@@ -362,7 +420,9 @@ export async function getOfficialTemporarySections(branchInput: string, forceRef
   } catch (error) {
     const message = error instanceof Error ? error.message : "The official temporary-section update failed.";
     console.warn(`[Temporary sections] Official source refresh failed: ${message}`);
-    if (previousCache) return { cache: previousCache, freshness: "stale", updateError: message };
+    // After a forced clear, do not fall back to a cache we just deleted.
+    const fallback = forceRefresh ? null : previousCache;
+    if (fallback) return { cache: fallback, freshness: "stale", updateError: message };
     throw new Error(`Could not load the official temporary-section details: ${message}`);
   }
 }

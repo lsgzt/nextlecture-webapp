@@ -17,6 +17,8 @@ export type StudentProfile = {
   mentorName: string | null;
   mentorMobileNumber: string | null;
   venue: string | null;
+  /** Class Coordinator name from the September 2026 permanent-section PDFs (new column). */
+  classCoordinator?: string | null;
   source: "official" | "manual";
   sourceUrl: string | null;
   savedAt: number;
