@@ -8,7 +8,7 @@ describe("temporary-section PDF parsing", () => {
     // September 2026 layout: Sr.No | Registration | CRN+Branch | Student | Mother | Father | Section | Sub | Group | Mentor | Mobile+Venue | Class Coordinator
     const source = `Sr.No.\tRegistration No.\tCRN Branch\tStudent Name\tMother Name\tFather Name\tSection\tSubsection\tGroup\tMentor Name\tMobile Venue\tClass Coordinator
 1\t26013653\t2621001 IT\tAaditya Koundal\tMonika\tKapil Dev\tITA\tITA1\tITAM1\tDr. Palwinder Kaur\t9814828414 S213\tMr. Sunil Kumar
-2\t26012726\t2621002IT\tAbhishek Pandey\tPooja Pandey\tBarindawan Pandey\tITB\tITB1\tITBM1\tDr. Sidharath Jain\t9501011768TNP-HALL\tMs. Coordinator`;
+2\t26012726\t2621002IT\tAbhishek Pandey\tPooja Pandey\tBarindawan Pandey\tITB\tITB1\tITBM1\tDr. Sidharath Jain\t8968801937 HW LAB\tMs. Coordinator`;
 
     const students = parseTemporarySectionText(source, "IT", sourceUrl);
 
@@ -31,8 +31,8 @@ describe("temporary-section PDF parsing", () => {
     });
     expect(students[1]).toMatchObject({
       crn: "2621002",
-      mentorMobileNumber: "9501011768",
-      venue: "TNP-HALL",
+      mentorMobileNumber: "8968801937",
+      venue: "HW LAB",
       classCoordinator: "Ms. Coordinator",
     });
     expect(students.map(student => student.crn)).toEqual(["2621001", "2621002"]);

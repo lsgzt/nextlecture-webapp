@@ -24,7 +24,7 @@ type TemporarySectionFetchResult = {
 
 const REQUEST_TIMEOUT_MS = 25_000;
 /** Bumped when official PDF column layout changed (Class Coordinator added, column reorder Sep 2026). */
-const CACHE_PREFIX = "official-gnedc-permanent-section-2026-v3";
+const CACHE_PREFIX = "official-gnedc-permanent-section-2026-v4";
 const PDF_RANGE_CHUNK_BYTES = 128 * 1024;
 const PDF_RANGE_CONCURRENCY = 8;
 const PDF_RANGE_TIMEOUT_MS = 25_000;
@@ -95,14 +95,21 @@ function splitCrnAndBranch(value: string): [string | null, string | null] {
 }
 
 /**
- * Split a cell that often merges Mentor mobile + Venue (e.g. "9814828414 S213" or "9814828414S213").
+ * Split a cell that often merges Mentor mobile + Venue
+ * (e.g. "9814828414 S213", "9814828414S213", "8968801937 HW LAB").
+ * Venue may contain spaces and mixed alphanumerics.
  */
 function splitMobileAndVenue(value: string): [string | null, string | null] {
   const normalized = normalizeText(value);
-  const match = normalized.match(/^(\d{10})\s*([A-Z0-9\-]+)$/i);
-  if (match) return [match[1], match[2]];
+  // 10-digit mobile, optional whitespace, then venue remainder (spaces allowed).
+  const match = normalized.match(/^(\d{10})\s*(.+)$/);
+  if (match) {
+    const venue = normalizeText(match[2]);
+    return [match[1], venue || null];
+  }
   if (/^\d{10}$/.test(normalized)) return [normalized, null];
-  if (/^[A-Z0-9\-]+$/i.test(normalized) && !/^\d+$/.test(normalized)) return [null, normalized];
+  // Venue-only cell (no leading mobile).
+  if (normalized && !/^\d+$/.test(normalized)) return [null, normalized];
   return [normalized || null, null];
 }
 
@@ -370,6 +377,7 @@ async function clearStoredCache(branch: TemporarySectionBranch) {
   const keys = [
     cacheKey(branch),
     // Legacy prefixes so force-refresh fully invalidates older layouts.
+    `official-gnedc-permanent-section-2026-v3:${branch}`,
     `official-gnedc-permanent-section-2026-v2:${branch}`,
     `official-gnedc-permanent-section-2026-v1:${branch}`,
   ];
