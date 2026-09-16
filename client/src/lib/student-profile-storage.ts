@@ -1,8 +1,8 @@
 import type { StudentProfile } from "@shared/student-profile";
 
 export const STUDENT_PROFILE_KEY = "nextlecture:student-profile";
-/** Bumped when every client must re-pick their official profile (Sep 2026 PDF layout + mobile/venue split). */
-export const STUDENT_PROFILE_SCHEMA_VERSION = 2;
+/** Bumped when every client must re-pick their official profile (Sep 2026 PDF layout + mobile/venue split). v3 forces another reset after intermediate bad parses. */
+export const STUDENT_PROFILE_SCHEMA_VERSION = 3;
 export const STUDENT_PROFILE_SCHEMA_KEY = "nextlecture:student-profile-schema";
 
 export type ManualStudentProfileFields = {
