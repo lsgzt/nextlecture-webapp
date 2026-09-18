@@ -121,6 +121,7 @@ function SessionPanel({ sessionId }: { sessionId: string }) {
   const [name, setName] = useState("");
   const [selectedCrn, setSelectedCrn] = useState<string | null>(null);
   const [marked, setMarked] = useState(false);
+  const [selectionHint, setSelectionHint] = useState<string | null>(null);
 
   const sessionQuery = trpc.markAttendance.getSession.useQuery(
     { sessionId },
@@ -157,11 +158,16 @@ function SessionPanel({ sessionId }: { sessionId: string }) {
 
   useEffect(() => {
     setSelectedCrn(null);
+    setSelectionHint(null);
   }, [name]);
 
   function submitMark(event: React.FormEvent) {
     event.preventDefault();
-    if (!selectedMatch) return;
+    if (!selectedMatch) {
+      setSelectionHint("Please select your name from the list above to mark your attendance.");
+      return;
+    }
+    setSelectionHint(null);
     markMutation.mutate({
       sessionId,
       studentName: selectedMatch.studentName,
@@ -258,11 +264,14 @@ function SessionPanel({ sessionId }: { sessionId: string }) {
                           <button
                             key={match.crn}
                             type="button"
-                            onClick={() => setSelectedCrn(match.crn)}
-                            className={`flex min-h-13 items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition ${
+                            onClick={() => {
+                              setSelectedCrn(match.crn);
+                              setSelectionHint(null);
+                            }}
+                            className={`flex min-h-13 items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
                               selectedCrn === match.crn
-                                ? "bg-teal-100 ring-2 ring-teal-600 dark:bg-teal-950/50"
-                                : "hover:bg-teal-50 dark:hover:bg-teal-950/30"
+                                ? "border-teal-300 bg-teal-50/90 shadow-sm dark:border-teal-700 dark:bg-teal-950/40"
+                                : "border-transparent hover:border-border hover:bg-muted/50"
                             }`}
                           >
                             <span>
@@ -290,12 +299,17 @@ function SessionPanel({ sessionId }: { sessionId: string }) {
               )}
               <button
                 type="submit"
-                disabled={!selectedMatch || markMutation.isPending}
+                disabled={markMutation.isPending}
                 className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-teal-700 px-5 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:opacity-60 active:scale-[0.97]"
               >
                 {markMutation.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <UserCheck className="h-4 w-4" />}
                 Mark me present
               </button>
+              {selectionHint && (
+                <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/25 dark:text-amber-100">
+                  {selectionHint}
+                </p>
+              )}
               {markMutation.isError && (
                 <p className="text-sm text-amber-800 dark:text-amber-200">{markMutation.error.message}</p>
               )}
