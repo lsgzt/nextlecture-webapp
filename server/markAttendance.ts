@@ -19,7 +19,7 @@ export type MarkAttendanceSession = {
 };
 
 const CACHE_PREFIX = "mark-attendance-session-v1";
-const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const SESSION_TTL_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 const inMemorySessions = new Map<string, MarkAttendanceSession>();
 
 function cacheKey(sessionId: string) {
