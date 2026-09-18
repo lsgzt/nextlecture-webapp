@@ -11,6 +11,11 @@ import { getPreviousPapers, getPreviousPaperSessions } from "./previousPapers";
 import { recoverAndroidRegistrationNumber } from "./androidProfileRecovery";
 import { getVacantRooms } from "./vacantRooms";
 import { getHolidayFeed, getNoticeFeed } from "./campusFeeds";
+import {
+  createMarkAttendanceSession,
+  getMarkAttendanceSession,
+  markAttendancePresent,
+} from "./markAttendance";
 
 async function loadGroup(group: string, forceRefresh = false) {
   try {
@@ -205,6 +210,59 @@ export const appRouter = router({
           throw new TRPCError({
             code: "BAD_GATEWAY",
             message: error instanceof Error ? error.message : "Couldn't load official college notices.",
+            cause: error,
+          });
+        }
+      }),
+  }),
+
+  markAttendance: router({
+    createSession: publicProcedure
+      .input(
+        z.object({
+          subjectName: z.string().trim().min(2).max(80),
+          branch: z.string().trim().toUpperCase().min(2).max(5),
+        }),
+      )
+      .mutation(async ({ input }) => {
+        try {
+          return await createMarkAttendanceSession(input.subjectName, input.branch);
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: error instanceof Error ? error.message : "Could not create attendance session.",
+            cause: error,
+          });
+        }
+      }),
+    getSession: publicProcedure
+      .input(z.object({ sessionId: z.string().trim().min(6).max(32) }))
+      .query(async ({ input }) => {
+        try {
+          return await getMarkAttendanceSession(input.sessionId);
+        } catch (error) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: error instanceof Error ? error.message : "Session not found.",
+            cause: error,
+          });
+        }
+      }),
+    markPresent: publicProcedure
+      .input(
+        z.object({
+          sessionId: z.string().trim().min(6).max(32),
+          studentName: z.string().trim().min(2).max(120),
+          crn: z.string().trim().regex(/^\d{6,16}$/),
+        }),
+      )
+      .mutation(async ({ input }) => {
+        try {
+          return await markAttendancePresent(input.sessionId, input.studentName, input.crn);
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: error instanceof Error ? error.message : "Could not mark attendance.",
             cause: error,
           });
         }

@@ -13,6 +13,7 @@ import AttendancePage from "./pages/AttendancePage";
 import DownloadPage from "./pages/DownloadPage";
 import VacantRoomsPage from "./pages/VacantRoomsPage";
 import CampusPage from "./pages/CampusPage";
+import MarkAttendancePage from "./pages/MarkAttendancePage";
 
 function Router() {
   return (
@@ -22,6 +23,8 @@ function Router() {
       <Route path="/vacant-rooms" component={VacantRoomsPage} />
       <Route path="/campus" component={CampusPage} />
       <Route path="/attendance" component={AttendancePage} />
+      <Route path="/mark-attendance" component={MarkAttendancePage} />
+      <Route path="/mark-attendance/:sessionId" component={MarkAttendancePage} />
       <Route path="/syllabus" component={SyllabusPage} />
       <Route path="/papers" component={PreviousPapersPage} />
       <Route path="/download" component={DownloadPage} />
