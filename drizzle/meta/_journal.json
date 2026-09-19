@@ -15,6 +15,13 @@
       "when": 1786885292018,
       "tag": "0001_charming_tempest",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1789837000000,
+      "tag": "0002_external_source_cache",
+      "breakpoints": true
     }
   ]
 }

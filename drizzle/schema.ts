@@ -16,8 +16,8 @@ export const users = mysqlTable("users", {
 });
 
 /**
- * A single validated server-side cache of the current official GNDEC timetable.
- * No student account or personal timetable data is stored here.
+ * Durable cache for official timetable + temporary-section PDFs + mark-attendance sessions.
+ * Do not change the shape of this table — mark-attendance and temporary-sections depend on it.
  */
 export const timetableCache = mysqlTable("timetable_cache", {
   id: varchar("id", { length: 64 }).primaryKey(),
@@ -26,5 +26,18 @@ export const timetableCache = mysqlTable("timetable_cache", {
   fetchedAt: timestamp("fetchedAt").notNull(),
 });
 
+/**
+ * Durable cache for other external GNDEC sources (vacant rooms, campus holidays/notices).
+ * Kept separate from timetable_cache so mark-attendance session keys stay isolated.
+ */
+export const externalSourceCache = mysqlTable("external_source_cache", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  sourceUrl: varchar("sourceUrl", { length: 1024 }).notNull(),
+  payload: longtext("payload").notNull(),
+  fetchedAt: timestamp("fetchedAt").notNull(),
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+export type ExternalSourceCache = typeof externalSourceCache.$inferSelect;
+export type InsertExternalSourceCache = typeof externalSourceCache.$inferInsert;

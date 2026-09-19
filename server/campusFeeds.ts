@@ -1,7 +1,9 @@
 /**
  * Official holidays + college notices — same upstream feeds as the Android app.
+ * Durable MySQL cache (timetable_cache rows) keeps serving when upstream feeds are down.
  */
 
+import { eq } from "drizzle-orm";
 import {
   HOLIDAY_API_BASE_URL,
   NOTICES_API_BASE_URL,
@@ -12,10 +14,14 @@ import type {
   HolidayFeed,
   NoticeFeed,
 } from "../shared/campus";
+import { externalSourceCache } from "../drizzle/schema";
+import { getDb } from "./db";
 
 const REQUEST_TIMEOUT_MS = 20_000;
 const CACHE_TTL_MS = 30 * 60 * 1000;
 const USER_AGENT = "NextLecture/1.0 (GNDEC campus feeds)";
+const HOLIDAY_CACHE_KEY = "campus-holidays-v1";
+const NOTICE_CACHE_KEY = "campus-notices-v1";
 
 type CacheEntry<T> = {
   data: T;
@@ -26,6 +32,83 @@ let holidayCache: CacheEntry<HolidayFeed> | null = null;
 let noticeCache: CacheEntry<NoticeFeed> | null = null;
 let holidayInFlight: Promise<HolidayFeed> | null = null;
 let noticeInFlight: Promise<NoticeFeed> | null = null;
+
+function isHolidayFeed(value: unknown): value is HolidayFeed {
+  if (!value || typeof value !== "object") return false;
+  const row = value as Partial<HolidayFeed>;
+  return Array.isArray(row.holidays) && row.holidays.length > 0;
+}
+
+function isNoticeFeed(value: unknown): value is NoticeFeed {
+  if (!value || typeof value !== "object") return false;
+  const row = value as Partial<NoticeFeed>;
+  return Array.isArray(row.notices) && row.notices.length > 0;
+}
+
+async function readPersistentFeed<T>(
+  key: string,
+  validate: (value: unknown) => value is T,
+): Promise<CacheEntry<T> | null> {
+  const db = await getDb();
+  if (!db) return null;
+  try {
+    const rows = await db
+      .select({ payload: externalSourceCache.payload, fetchedAt: externalSourceCache.fetchedAt })
+      .from(externalSourceCache)
+      .where(eq(externalSourceCache.id, key))
+      .limit(1);
+    if (!rows[0]?.payload) return null;
+    const parsed = JSON.parse(rows[0].payload) as unknown;
+    if (!validate(parsed)) return null;
+    const fetchedAtMillis =
+      rows[0].fetchedAt instanceof Date ? rows[0].fetchedAt.getTime() : Date.parse(String(rows[0].fetchedAt));
+    return {
+      data: parsed,
+      fetchedAtMillis: Number.isFinite(fetchedAtMillis) ? fetchedAtMillis : Date.now(),
+    };
+  } catch (error) {
+    console.warn(`[Campus feeds] Persistent cache could not be read (${key}):`, error);
+    return null;
+  }
+}
+
+async function persistFeed(key: string, sourceUrl: string, data: unknown, fetchedAtMillis: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db
+      .insert(externalSourceCache)
+      .values({
+        id: key,
+        sourceUrl,
+        payload: JSON.stringify(data),
+        fetchedAt: new Date(fetchedAtMillis),
+      })
+      .onDuplicateKeyUpdate({
+        set: {
+          sourceUrl,
+          payload: JSON.stringify(data),
+          fetchedAt: new Date(fetchedAtMillis),
+        },
+      });
+  } catch (error) {
+    console.warn(`[Campus feeds] Persistent cache could not be saved (${key}):`, error);
+  }
+}
+
+async function getKnownHolidayCache(): Promise<CacheEntry<HolidayFeed> | null> {
+  if (holidayCache) return holidayCache;
+  const persistent = await readPersistentFeed(HOLIDAY_CACHE_KEY, isHolidayFeed);
+  if (persistent) holidayCache = persistent;
+  return persistent;
+}
+
+async function getKnownNoticeCache(): Promise<CacheEntry<NoticeFeed> | null> {
+  if (noticeCache) return noticeCache;
+  const persistent = await readPersistentFeed(NOTICE_CACHE_KEY, isNoticeFeed);
+  if (persistent) noticeCache = persistent;
+  return persistent;
+}
 
 function asString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -86,8 +169,9 @@ async function fetchJson(url: string): Promise<unknown> {
 }
 
 async function loadHolidays(forceRefresh: boolean): Promise<HolidayFeed> {
-  if (!forceRefresh && holidayCache && Date.now() - holidayCache.fetchedAtMillis < CACHE_TTL_MS) {
-    return { ...holidayCache.data, servedFromCache: true, stale: false, refreshError: null };
+  const known = await getKnownHolidayCache();
+  if (!forceRefresh && known && Date.now() - known.fetchedAtMillis < CACHE_TTL_MS) {
+    return { ...known.data, servedFromCache: true, stale: false, refreshError: null };
   }
   if (holidayInFlight && !forceRefresh) return holidayInFlight;
 
@@ -103,22 +187,25 @@ async function loadHolidays(forceRefresh: boolean): Promise<HolidayFeed> {
           .filter((item): item is CampusHoliday => Boolean(item))
           .sort((a, b) => a.date.localeCompare(b.date));
         if (!holidays.length) throw new Error("No holidays found in the official list");
+        const now = Date.now();
         const feed: HolidayFeed = {
           holidays,
-          fetchedAt: typeof payload.fetchedAt === "string" ? payload.fetchedAt : new Date().toISOString(),
-          servedFromCache: Boolean(payload.servedFromCache),
-          stale: Boolean(payload.stale),
-          refreshError: typeof payload.refreshError === "string" ? payload.refreshError : null,
+          fetchedAt: typeof payload.fetchedAt === "string" ? payload.fetchedAt : new Date(now).toISOString(),
+          servedFromCache: false,
+          stale: false,
+          refreshError: null,
         };
-        holidayCache = { data: feed, fetchedAtMillis: Date.now() };
+        holidayCache = { data: feed, fetchedAtMillis: now };
+        await persistFeed(HOLIDAY_CACHE_KEY, url, feed, now);
         return feed;
       } catch (error) {
         lastError = error instanceof Error ? error.message : "Could not load holidays";
       }
     }
-    if (holidayCache) {
+    const fallback = holidayCache ?? (await getKnownHolidayCache());
+    if (fallback) {
       return {
-        ...holidayCache.data,
+        ...fallback.data,
         servedFromCache: true,
         stale: true,
         refreshError: lastError,
@@ -133,8 +220,9 @@ async function loadHolidays(forceRefresh: boolean): Promise<HolidayFeed> {
 }
 
 async function loadNotices(forceRefresh: boolean): Promise<NoticeFeed> {
-  if (!forceRefresh && noticeCache && Date.now() - noticeCache.fetchedAtMillis < CACHE_TTL_MS) {
-    return { ...noticeCache.data, servedFromCache: true, stale: false, refreshError: null };
+  const known = await getKnownNoticeCache();
+  if (!forceRefresh && known && Date.now() - known.fetchedAtMillis < CACHE_TTL_MS) {
+    return { ...known.data, servedFromCache: true, stale: false, refreshError: null };
   }
   if (noticeInFlight && !forceRefresh) return noticeInFlight;
 
@@ -147,20 +235,23 @@ async function loadNotices(forceRefresh: boolean): Promise<NoticeFeed> {
         .filter((item): item is CampusNotice => Boolean(item))
         .sort((a, b) => b.publishedDate.localeCompare(a.publishedDate) || b.firstSeenAt.localeCompare(a.firstSeenAt));
       if (!notices.length) throw new Error("No notices found in the ERP response");
+      const now = Date.now();
       const feed: NoticeFeed = {
         notices,
-        fetchedAt: typeof payload.fetchedAt === "string" ? payload.fetchedAt : new Date().toISOString(),
-        servedFromCache: Boolean(payload.servedFromCache),
-        stale: Boolean(payload.stale),
-        refreshError: typeof payload.refreshError === "string" ? payload.refreshError : null,
+        fetchedAt: typeof payload.fetchedAt === "string" ? payload.fetchedAt : new Date(now).toISOString(),
+        servedFromCache: false,
+        stale: false,
+        refreshError: null,
       };
-      noticeCache = { data: feed, fetchedAtMillis: Date.now() };
+      noticeCache = { data: feed, fetchedAtMillis: now };
+      await persistFeed(NOTICE_CACHE_KEY, url, feed, now);
       return feed;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not load notices";
-      if (noticeCache) {
+      const fallback = noticeCache ?? (await getKnownNoticeCache());
+      if (fallback) {
         return {
-          ...noticeCache.data,
+          ...fallback.data,
           servedFromCache: true,
           stale: true,
           refreshError: message,

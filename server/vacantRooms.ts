@@ -5,6 +5,8 @@
 
 import { load, type CheerioAPI, type Cheerio } from "cheerio";
 import type { Element } from "domhandler";
+import { eq } from "drizzle-orm";
+import { externalSourceCache } from "../drizzle/schema";
 import type {
   GlobalRoomData,
   MergedRoom,
@@ -15,6 +17,7 @@ import type {
   SourceRoomDoc,
 } from "../shared/vacant-rooms";
 import { canonicalRoomName, VACANT_ROOMS_DAYS } from "../shared/vacant-rooms";
+import { getDb } from "./db";
 
 export type RoomSourceRoot = {
   id: string;
@@ -39,6 +42,8 @@ const FRESH_WINDOW_MS = 6 * 60 * 60 * 1000;
 const MAX_CANDIDATES = 3;
 const REQUEST_TIMEOUT_MS = 20_000;
 const USER_AGENT = "NextLecture/1.0 (GNDEC vacant rooms)";
+/** Durable MySQL key (reuses timetable_cache table as a generic external-source store). */
+const PERSISTENT_CACHE_KEY = "vacant-rooms-v1";
 
 type RootCandidates = {
   root: RoomSourceRoot;
@@ -54,6 +59,69 @@ type CachedRoomData = {
 
 let memoryCache: CachedRoomData | null = null;
 let inFlight: Promise<GlobalRoomData> | null = null;
+
+function isValidCachedRoomData(value: unknown): value is CachedRoomData {
+  if (!value || typeof value !== "object") return false;
+  const row = value as Partial<CachedRoomData>;
+  return (
+    Array.isArray(row.docs) &&
+    row.docs.length > 0 &&
+    Array.isArray(row.incompleteRoots) &&
+    typeof row.fetchedAtMillis === "number" &&
+    Number.isFinite(row.fetchedAtMillis)
+  );
+}
+
+async function readPersistentCache(): Promise<CachedRoomData | null> {
+  const db = await getDb();
+  if (!db) return null;
+  try {
+    const rows = await db
+      .select({ payload: externalSourceCache.payload })
+      .from(externalSourceCache)
+      .where(eq(externalSourceCache.id, PERSISTENT_CACHE_KEY))
+      .limit(1);
+    if (!rows[0]?.payload) return null;
+    const parsed = JSON.parse(rows[0].payload) as unknown;
+    if (!isValidCachedRoomData(parsed)) return null;
+    return parsed;
+  } catch (error) {
+    console.warn("[Vacant rooms] Persistent cache could not be read:", error);
+    return null;
+  }
+}
+
+async function persistCache(cache: CachedRoomData): Promise<void> {
+  if (!cache.docs.length) return;
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db
+      .insert(externalSourceCache)
+      .values({
+        id: PERSISTENT_CACHE_KEY,
+        sourceUrl: "vacant-rooms-multi-root",
+        payload: JSON.stringify(cache),
+        fetchedAt: new Date(cache.fetchedAtMillis),
+      })
+      .onDuplicateKeyUpdate({
+        set: {
+          sourceUrl: "vacant-rooms-multi-root",
+          payload: JSON.stringify(cache),
+          fetchedAt: new Date(cache.fetchedAtMillis),
+        },
+      });
+  } catch (error) {
+    console.warn("[Vacant rooms] Persistent cache could not be saved:", error);
+  }
+}
+
+async function getKnownCache(): Promise<CachedRoomData | null> {
+  if (memoryCache?.docs.length) return memoryCache;
+  const persistent = await readPersistentCache();
+  if (persistent) memoryCache = persistent;
+  return persistent;
+}
 
 const PLACEHOLDERS = new Set([
   "GHOST ROOM", "TEACH OFFICE", "TEACH OFFICE1", "FACULTY ROOM",
@@ -568,7 +636,8 @@ function merge(docs: SourceRoomDoc[], incompleteRoots: string[]): GlobalRoomData
 
 async function refresh(force: boolean): Promise<GlobalRoomData> {
   const now = Date.now();
-  const cached = memoryCache ?? { docs: [] as SourceRoomDoc[], incompleteRoots: [] as string[], fetchedAtMillis: 0 };
+  const previous = await getKnownCache();
+  const cached = previous ?? { docs: [] as SourceRoomDoc[], incompleteRoots: [] as string[], fetchedAtMillis: 0 };
   let discovered: Map<string, RootCandidates> | null = null;
   try {
     discovered = await discoverAll();
@@ -617,22 +686,40 @@ async function refresh(force: boolean): Promise<GlobalRoomData> {
       incomplete.push(root.id);
     }
   }
-  if (!docs.length) throw new Error("No department room timetable could be loaded right now");
-  memoryCache = { docs, incompleteRoots: incomplete, fetchedAtMillis: now };
+  if (!docs.length) {
+    // Prefer any last-good durable/memory cache when every live root fails.
+    if (cached.docs.length) {
+      memoryCache = cached;
+      return merge(cached.docs, cached.incompleteRoots);
+    }
+    throw new Error("No department room timetable could be loaded right now");
+  }
+  const next: CachedRoomData = { docs, incompleteRoots: incomplete, fetchedAtMillis: now };
+  memoryCache = next;
+  await persistCache(next);
   return merge(docs, incomplete);
 }
 
 export async function getVacantRooms(forceRefresh = false): Promise<GlobalRoomData> {
-  if (!forceRefresh && memoryCache) {
-    const age = Date.now() - memoryCache.fetchedAtMillis;
-    if (age < FRESH_WINDOW_MS && memoryCache.docs.length) {
-      return merge(memoryCache.docs, memoryCache.incompleteRoots);
+  const known = await getKnownCache();
+  if (!forceRefresh && known?.docs.length) {
+    const age = Date.now() - known.fetchedAtMillis;
+    if (age < FRESH_WINDOW_MS) {
+      // Keep cache warm in the background when data is still usable.
+      if (age > FRESH_WINDOW_MS / 2) {
+        void refresh(false).catch(error => console.warn("[Vacant rooms] Background refresh failed:", error));
+      }
+      return merge(known.docs, known.incompleteRoots);
     }
   }
   if (inFlight && !forceRefresh) return inFlight;
   inFlight = refresh(forceRefresh)
-    .catch(error => {
-      if (memoryCache?.docs.length) return merge(memoryCache.docs, memoryCache.incompleteRoots);
+    .catch(async error => {
+      const fallback = memoryCache ?? (await readPersistentCache());
+      if (fallback?.docs.length) {
+        memoryCache = fallback;
+        return merge(fallback.docs, fallback.incompleteRoots);
+      }
       throw error;
     })
     .finally(() => {
