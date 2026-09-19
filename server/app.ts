@@ -8,6 +8,7 @@ import { getOfficialSyllabusPdfBuffer } from "./syllabus";
 import { createServerFallbackGeminiResponse, getConfiguredGeminiApiKey } from "./syllabusGemini";
 import { createAttendanceProxyHandler } from "./attendanceProxy";
 import { registerFcmToken, runNotificationCheck, sendCustomNotification } from "./notifications";
+import { refreshExternalCaches } from "./cacheRefresh";
 
 /**
  * Creates the shared HTTP application for local hosting and serverless adapters.
@@ -47,6 +48,24 @@ export function createApp() {
       res.status(500).json({ message: "Notification check failed" });
     }
   });
+
+  app.all("/api/cache/cron", async (req, res) => {
+    const expected = process.env.CACHE_CRON_SECRET || process.env.NOTIFICATION_CRON_SECRET;
+    const supplied = req.header("authorization")?.replace(/^Bearer\s+/i, "") || req.header("x-cron-secret");
+    // Allow Vercel Cron (no secret configured) only when no secret is set; otherwise require match.
+    if (expected && supplied !== expected) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    try {
+      const result = await refreshExternalCaches();
+      res.status(result.ok ? 200 : 207).json(result);
+    } catch (error) {
+      console.error("[Cache cron] failed:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Cache refresh failed" });
+    }
+  });
+
   app.post("/api/notifications/send", async (req, res) => {
     const expected = process.env.NOTIFICATION_CRON_SECRET;
     const supplied = req.header("authorization")?.replace(/^Bearer\s+/i, "") || req.header("x-cron-secret");

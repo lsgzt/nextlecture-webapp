@@ -38,7 +38,10 @@ export const ROOM_SOURCE_ROOTS: RoomSourceRoot[] = [
 ];
 
 const ROOT_ORDER = ["appsc", "cse", "ece", "ee", "me", "ce", "it", "mca", "mba"];
-const FRESH_WINDOW_MS = 6 * 60 * 60 * 1000;
+/** Prefer live data newer than this. Beyond it we still serve durable cache and refresh in background. */
+const FRESH_WINDOW_MS = 60 * 60 * 1000;
+/** Kick a non-blocking refresh once age exceeds this soft TTL. */
+const SOFT_REFRESH_MS = 20 * 60 * 1000;
 const MAX_CANDIDATES = 3;
 const REQUEST_TIMEOUT_MS = 20_000;
 const USER_AGENT = "NextLecture/1.0 (GNDEC vacant rooms)";
@@ -704,13 +707,13 @@ export async function getVacantRooms(forceRefresh = false): Promise<GlobalRoomDa
   const known = await getKnownCache();
   if (!forceRefresh && known?.docs.length) {
     const age = Date.now() - known.fetchedAtMillis;
-    if (age < FRESH_WINDOW_MS) {
-      // Keep cache warm in the background when data is still usable.
-      if (age > FRESH_WINDOW_MS / 2) {
-        void refresh(false).catch(error => console.warn("[Vacant rooms] Background refresh failed:", error));
-      }
-      return merge(known.docs, known.incompleteRoots);
+    // Always prefer instant response from durable/memory cache; refresh in the background
+    // so users are not stuck on multi-root HTML downloads and data does not go stale for hours.
+    if (age >= SOFT_REFRESH_MS) {
+      void refresh(age >= FRESH_WINDOW_MS)
+        .catch(error => console.warn("[Vacant rooms] Background refresh failed:", error));
     }
+    return merge(known.docs, known.incompleteRoots);
   }
   if (inFlight && !forceRefresh) return inFlight;
   inFlight = refresh(forceRefresh)
