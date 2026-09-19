@@ -12,10 +12,6 @@
     {
       "path": "/api/notifications/cron",
       "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/cache/cron",
-      "schedule": "15 5 * * *"
     }
   ],
   "rewrites": [

@@ -18,9 +18,8 @@ import { externalSourceCache } from "../drizzle/schema";
 import { getDb } from "./db";
 
 const REQUEST_TIMEOUT_MS = 20_000;
-const CACHE_TTL_MS = 30 * 60 * 1000;
-/** Background revalidation once cache is older than this. */
-const SOFT_REFRESH_MS = 10 * 60 * 1000;
+/** Debounce background revalidation on user traffic (Hobby has no frequent cron). */
+const REVALIDATE_AFTER_MS = 2 * 60 * 1000;
 const USER_AGENT = "NextLecture/1.0 (GNDEC campus feeds)";
 const HOLIDAY_CACHE_KEY = "campus-holidays-v1";
 const NOTICE_CACHE_KEY = "campus-notices-v1";
@@ -174,12 +173,10 @@ async function loadHolidays(forceRefresh: boolean): Promise<HolidayFeed> {
   const known = await getKnownHolidayCache();
   if (!forceRefresh && known) {
     const age = Date.now() - known.fetchedAtMillis;
-    if (age < CACHE_TTL_MS) {
-      if (age >= SOFT_REFRESH_MS && !holidayInFlight) {
-        void loadHolidays(true).catch(error => console.warn("[Campus feeds] Holiday background refresh failed:", error));
-      }
-      return { ...known.data, servedFromCache: true, stale: age >= SOFT_REFRESH_MS, refreshError: null };
+    if (age >= REVALIDATE_AFTER_MS && !holidayInFlight) {
+      void loadHolidays(true).catch(error => console.warn("[Campus feeds] Holiday background refresh failed:", error));
     }
+    return { ...known.data, servedFromCache: true, stale: age >= REVALIDATE_AFTER_MS, refreshError: null };
   }
   if (holidayInFlight && !forceRefresh) return holidayInFlight;
 
@@ -231,12 +228,10 @@ async function loadNotices(forceRefresh: boolean): Promise<NoticeFeed> {
   const known = await getKnownNoticeCache();
   if (!forceRefresh && known) {
     const age = Date.now() - known.fetchedAtMillis;
-    if (age < CACHE_TTL_MS) {
-      if (age >= SOFT_REFRESH_MS && !noticeInFlight) {
-        void loadNotices(true).catch(error => console.warn("[Campus feeds] Notice background refresh failed:", error));
-      }
-      return { ...known.data, servedFromCache: true, stale: age >= SOFT_REFRESH_MS, refreshError: null };
+    if (age >= REVALIDATE_AFTER_MS && !noticeInFlight) {
+      void loadNotices(true).catch(error => console.warn("[Campus feeds] Notice background refresh failed:", error));
     }
+    return { ...known.data, servedFromCache: true, stale: age >= REVALIDATE_AFTER_MS, refreshError: null };
   }
   if (noticeInFlight && !forceRefresh) return noticeInFlight;
 

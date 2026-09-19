@@ -42,6 +42,8 @@ export type TimetableSourceResolverOptions = {
 };
 
 const CACHE_KEY = "official-gnedc-timetable-v4";
+/** Debounce background revalidation on user traffic. */
+const REVALIDATE_AFTER_MS = 2 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 25_000;
 const SOURCE_RESOLUTION_TIMEOUT_MS = 15_000;
 const OFFICIAL_TIMETABLE_HOST = "appsc.gndec.ac.in";
@@ -504,11 +506,21 @@ async function getKnownCache() {
  */
 export async function getOfficialTimetable(forceRefresh = false, requiredGroup?: string): Promise<TimetableFetchResult> {
   const previousCache = await getKnownCache();
-  const cacheIsFresh = Boolean(previousCache && Date.now() - previousCache.fetchedAt < TIMETABLE_CACHE_TTL_MS);
-  if (!forceRefresh && previousCache && cacheIsFresh) {
-    void refreshCache(previousCache, false, requiredGroup).catch(error => console.warn("[Timetable] Background source refresh failed:", error));
+  // Request-driven SWR: any durable cache is returned immediately; refresh runs in the background.
+  if (!forceRefresh && previousCache) {
+    const age = Date.now() - previousCache.fetchedAt;
+    const cacheIsFresh = age < TIMETABLE_CACHE_TTL_MS;
+    if (age >= REVALIDATE_AFTER_MS && !inFlightRefresh) {
+      void refreshCache(previousCache, age >= TIMETABLE_CACHE_TTL_MS, requiredGroup).catch(error =>
+        console.warn("[Timetable] Background source refresh failed:", error),
+      );
+    }
     const emergency = previousCache.sourceUrl === TIMETABLE_EMERGENCY_SNAPSHOT_URL;
-    return { cache: previousCache, freshness: emergency ? "stale" : "fresh", updateError: emergency ? EMERGENCY_SNAPSHOT_NOTICE : null };
+    return {
+      cache: previousCache,
+      freshness: emergency || !cacheIsFresh ? "stale" : "fresh",
+      updateError: emergency ? EMERGENCY_SNAPSHOT_NOTICE : null,
+    };
   }
   try {
     const cache = await refreshCache(previousCache, forceRefresh, requiredGroup);
