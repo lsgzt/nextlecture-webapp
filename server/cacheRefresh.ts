@@ -1,6 +1,10 @@
 /**
  * Scheduled + on-demand refresh of durable external-source caches.
  * Keeps vacant rooms, timetable, and campus feeds current without blocking user requests.
+ *
+ * Primary freshness on Hobby (no sub-daily Vercel Cron): user requests use
+ * stale-while-revalidate soft TTLs in vacantRooms / campusFeeds / timetable.
+ * This endpoint is a daily warm-up (and manual trigger) only.
  */
 
 import { getHolidayFeed, getNoticeFeed } from "./campusFeeds";

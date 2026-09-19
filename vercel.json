@@ -15,7 +15,7 @@
     },
     {
       "path": "/api/cache/cron",
-      "schedule": "0 * * * *"
+      "schedule": "15 5 * * *"
     }
   ],
   "rewrites": [
