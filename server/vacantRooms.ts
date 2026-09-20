@@ -17,6 +17,7 @@ import type {
   SourceRoomDoc,
 } from "../shared/vacant-rooms";
 import { canonicalRoomName, VACANT_ROOMS_DAYS } from "../shared/vacant-rooms";
+import { scheduleBackground } from "./_core/background";
 import { getDb } from "./db";
 
 export type RoomSourceRoot = {
@@ -708,7 +709,7 @@ export async function getVacantRooms(forceRefresh = false): Promise<GlobalRoomDa
   if (!forceRefresh && known?.docs.length) {
     const age = Date.now() - known.fetchedAtMillis;
     if (age >= REVALIDATE_AFTER_MS && !inFlight) {
-      void refresh(false).catch(error => console.warn("[Vacant rooms] Background refresh failed:", error));
+      scheduleBackground(refresh(false).then(() => undefined));
     }
     return merge(known.docs, known.incompleteRoots);
   }

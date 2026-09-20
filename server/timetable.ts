@@ -17,6 +17,7 @@ import {
   type Weekday,
   WEEKDAYS,
 } from "../shared/timetable";
+import { scheduleBackground } from "./_core/background";
 import { getDb } from "./db";
 
 type TimetableFetchResult = {
@@ -409,7 +410,10 @@ async function readPersistentCache() {
 
 async function persistCache(cache: TimetableCacheEnvelope) {
   const db = await getDb();
-  if (!db) return;
+  if (!db) {
+    console.warn("[Timetable] Persistent cache skipped: DATABASE_URL / db unavailable");
+    return;
+  }
   try {
     await db.insert(timetableCache).values({ id: CACHE_KEY, sourceUrl: cache.sourceUrl, payload: JSON.stringify(cache), fetchedAt: new Date(cache.fetchedAt) }).onDuplicateKeyUpdate({
       set: { sourceUrl: cache.sourceUrl, payload: JSON.stringify(cache), fetchedAt: new Date(cache.fetchedAt) },
@@ -510,9 +514,11 @@ export async function getOfficialTimetable(forceRefresh = false, requiredGroup?:
   if (!forceRefresh && previousCache) {
     const age = Date.now() - previousCache.fetchedAt;
     const cacheIsFresh = age < TIMETABLE_CACHE_TTL_MS;
+    // Always revalidate against upstream (ETag/304 keeps it cheap). Previously forceDataRefresh
+    // stayed false while "fresh", so background work exited without touching the network or DB.
     if (age >= REVALIDATE_AFTER_MS && !inFlightRefresh) {
-      void refreshCache(previousCache, age >= TIMETABLE_CACHE_TTL_MS, requiredGroup).catch(error =>
-        console.warn("[Timetable] Background source refresh failed:", error),
+      scheduleBackground(
+        refreshCache(previousCache, true, requiredGroup).then(() => undefined),
       );
     }
     const emergency = previousCache.sourceUrl === TIMETABLE_EMERGENCY_SNAPSHOT_URL;

@@ -15,6 +15,7 @@ import type {
   NoticeFeed,
 } from "../shared/campus";
 import { externalSourceCache } from "../drizzle/schema";
+import { scheduleBackground } from "./_core/background";
 import { getDb } from "./db";
 
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -174,7 +175,7 @@ async function loadHolidays(forceRefresh: boolean): Promise<HolidayFeed> {
   if (!forceRefresh && known) {
     const age = Date.now() - known.fetchedAtMillis;
     if (age >= REVALIDATE_AFTER_MS && !holidayInFlight) {
-      void loadHolidays(true).catch(error => console.warn("[Campus feeds] Holiday background refresh failed:", error));
+      scheduleBackground(loadHolidays(true).then(() => undefined));
     }
     return { ...known.data, servedFromCache: true, stale: age >= REVALIDATE_AFTER_MS, refreshError: null };
   }
@@ -229,7 +230,7 @@ async function loadNotices(forceRefresh: boolean): Promise<NoticeFeed> {
   if (!forceRefresh && known) {
     const age = Date.now() - known.fetchedAtMillis;
     if (age >= REVALIDATE_AFTER_MS && !noticeInFlight) {
-      void loadNotices(true).catch(error => console.warn("[Campus feeds] Notice background refresh failed:", error));
+      scheduleBackground(loadNotices(true).then(() => undefined));
     }
     return { ...known.data, servedFromCache: true, stale: age >= REVALIDATE_AFTER_MS, refreshError: null };
   }
