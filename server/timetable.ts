@@ -129,10 +129,15 @@ export function discoverTimetableSourceFromIndexHtml(html: string, indexUrl = TI
   const $ = load(html);
   const candidates: string[] = [];
   $("a").each((_, anchor) => {
-    const visibleText = normalizeText($(anchor).text());
-    if (!/sub[-\s]?section\s+wise/i.test(visibleText)) return;
-    const url = validateOfficialTimetableUrl($(anchor).attr("href"), indexUrl);
+    const href = $(anchor).attr("href");
+    const url = validateOfficialTimetableUrl(href, indexUrl);
     if (!url || !/subgroups_days_horizontal/i.test(url)) return;
+    const visibleText = normalizeText($(anchor).text());
+    // Prefer clearly labeled Sub-section links, but still accept bare subgroup HTML hrefs
+    // (index markup sometimes drops/changes the visible label).
+    if (visibleText && !/sub[-\s]?section/i.test(visibleText) && !/subgroups_days_horizontal/i.test(href ?? "")) {
+      return;
+    }
     candidates.push(url);
   });
   if (!candidates.length) return null;
@@ -201,8 +206,16 @@ export async function resolveTimetableSource(options: TimetableSourceResolverOpt
     fallbackError = asErrorMessage(error);
   }
 
+  // Prefer the highest-scored known URL. A stale lastKnown must not block a newer bundled source
+  // (this is what kept production on 06_09 after 17_09 was published).
   const lastKnown = validateOfficialTimetableUrl(options.lastKnownSourceUrl, officialIndexUrl);
-  if (lastKnown) return { url: lastKnown, source: "last-known-good", officialError, fallbackError };
+  const builtIn = validateOfficialTimetableUrl(TIMETABLE_SOURCE_URL, officialIndexUrl);
+  type Candidate = { url: string; source: "last-known-good" | "built-in"; score: number };
+  const ranked: Candidate[] = [];
+  if (lastKnown) ranked.push({ url: lastKnown, source: "last-known-good", score: scoreTimetableSourceUrl(lastKnown) });
+  if (builtIn) ranked.push({ url: builtIn, source: "built-in", score: scoreTimetableSourceUrl(builtIn) });
+  ranked.sort((a, b) => b.score - a.score);
+  if (ranked[0]) return { url: ranked[0].url, source: ranked[0].source, officialError, fallbackError };
   return { url: TIMETABLE_SOURCE_URL, source: "built-in", officialError, fallbackError };
 }
 
@@ -480,6 +493,10 @@ async function refreshCache(previousCache: TimetableCacheEnvelope | null, forceD
   if (!inFlightRefresh) {
     inFlightRefresh = (async () => {
       const resolution = await resolveTimetableSource({ lastKnownSourceUrl: previousCache?.sourceUrl ?? null });
+      console.info("[Timetable] Source resolved:", resolution.source, resolution.url, {
+        officialError: resolution.officialError,
+        fallbackError: resolution.fallbackError,
+      });
       const sourceChanged = previousCache?.sourceUrl !== resolution.url;
       const cacheIsFresh = Boolean(previousCache && Date.now() - previousCache.fetchedAt < TIMETABLE_CACHE_TTL_MS);
       if (previousCache && !forceDataRefresh && !sourceChanged && cacheIsFresh) return previousCache;
