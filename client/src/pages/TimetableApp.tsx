@@ -54,9 +54,16 @@ function getTemporarySectionBranch(group: string | null) {
 function Freshness({ fetchedAt, freshness, updateError }: { fetchedAt?: number; freshness?: "fresh" | "stale"; updateError?: string | null }) {
   if (!fetchedAt) return null;
   const difference = Math.max(0, Math.round((Date.now() - fetchedAt) / 60_000));
-  const label = difference < 1 ? "updated just now" : `updated ${difference} min ago`;
-  const stale = freshness === "stale" || Boolean(updateError);
-  return <div className={`flex items-center gap-2 text-xs font-medium ${stale ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground"}`}>{stale ? <AlertCircle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />}<span>{stale ? "Using last saved timetable" : `Timetable ${label}`}</span></div>;
+  const label = difference < 1 ? "updated just now" : difference < 60 ? `updated ${difference} min ago` : `updated ${Math.round(difference / 60)} hr ago`;
+  // Only treat as degraded when the server failed to refresh (or emergency snapshot).
+  // Age alone must not show "last saved" — that made every open after 30m look broken.
+  const stale = Boolean(updateError) || freshness === "stale";
+  return (
+    <div className={`flex items-center gap-2 text-xs font-medium ${stale ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground"}`}>
+      {stale ? <AlertCircle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />}
+      <span>{stale ? "Using last saved timetable" : `Timetable ${label}`}</span>
+    </div>
+  );
 }
 
 function GroupPicker({
@@ -168,8 +175,8 @@ export default function TimetableApp() {
   const [showPicker, setShowPicker] = useState(() => !getInitialSelectedGroup());
   const [selectedYear, setSelectedYear] = useState<string>("");
   const [selectedBranch, setSelectedBranch] = useState<string>("");
-  const groupsQuery = trpc.timetable.groups.useQuery(undefined, { staleTime: 20 * 60 * 1000, retry: 1 });
-  const dashboardQuery = trpc.timetable.dashboard.useQuery({ group: selectedGroup ?? "ITB2" }, { enabled: Boolean(selectedGroup), staleTime: 20 * 60 * 1000, retry: 1 });
+  const groupsQuery = trpc.timetable.groups.useQuery(undefined, { staleTime: 60 * 1000, refetchOnMount: "always", retry: 1 });
+  const dashboardQuery = trpc.timetable.dashboard.useQuery({ group: selectedGroup ?? "ITB2" }, { enabled: Boolean(selectedGroup), staleTime: 60 * 1000, refetchOnMount: "always", retry: 1 });
   const refreshMutation = trpc.timetable.refresh.useMutation();
   const utils = trpc.useUtils();
 
@@ -331,7 +338,7 @@ export default function TimetableApp() {
           </button>
         </div>
         <div className="mt-2 px-0.5">
-          <Freshness fetchedAt={data?.fetchedAt ?? localTimetable?.fetchedAt} freshness={data?.freshness ?? "stale"} updateError={data?.updateError} />
+          <Freshness fetchedAt={data?.fetchedAt ?? localTimetable?.fetchedAt} freshness={dashboardQuery.data?.freshness ?? (dashboardQuery.isError || data?.updateError ? "stale" : "fresh")} updateError={data?.updateError ?? (dashboardQuery.isError ? "Could not refresh" : null)} />
         </div>
       </section>
       <AnnouncementBanner className="mb-3" />

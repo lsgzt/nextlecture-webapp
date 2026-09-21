@@ -17,7 +17,6 @@ import {
   type Weekday,
   WEEKDAYS,
 } from "../shared/timetable";
-import { scheduleBackground } from "./_core/background";
 import { getDb } from "./db";
 
 type TimetableFetchResult = {
@@ -522,33 +521,36 @@ async function getKnownCache() {
 }
 
 /**
- * Return a valid cached timetable immediately when possible and resolve the current
- * official source in the background. Forced refreshes always wait for full resolution.
+ * Return MySQL cache only when it is very recent; otherwise refresh from the official
+ * source before responding so opening the app picks up timetable changes.
+ * On upstream failure, fall back to the last durable cache (stale).
  */
 export async function getOfficialTimetable(forceRefresh = false, requiredGroup?: string): Promise<TimetableFetchResult> {
   const previousCache = await getKnownCache();
-  // Request-driven SWR: any durable cache is returned immediately; refresh runs in the background.
+
+  // Very recent durable cache: return immediately (no need to hit GNDEC every few seconds).
   if (!forceRefresh && previousCache) {
     const age = Date.now() - previousCache.fetchedAt;
-    const cacheIsFresh = age < TIMETABLE_CACHE_TTL_MS;
-    // Always revalidate against upstream (ETag/304 keeps it cheap). Previously forceDataRefresh
-    // stayed false while "fresh", so background work exited without touching the network or DB.
-    if (age >= REVALIDATE_AFTER_MS && !inFlightRefresh) {
-      scheduleBackground(
-        refreshCache(previousCache, true, requiredGroup).then(() => undefined),
-      );
+    if (age < REVALIDATE_AFTER_MS) {
+      const emergency = previousCache.sourceUrl === TIMETABLE_EMERGENCY_SNAPSHOT_URL;
+      return {
+        cache: previousCache,
+        freshness: emergency ? "stale" : "fresh",
+        updateError: emergency ? EMERGENCY_SNAPSHOT_NOTICE : null,
+      };
     }
-    const emergency = previousCache.sourceUrl === TIMETABLE_EMERGENCY_SNAPSHOT_URL;
+  }
+
+  // Otherwise wait for a live refresh so opening the app updates the timetable
+  // (same as pre-MySQL behavior). MySQL remains the fallback when upstream fails.
+  try {
+    const cache = await refreshCache(previousCache, true, requiredGroup);
+    const emergency = cache.sourceUrl === TIMETABLE_EMERGENCY_SNAPSHOT_URL;
     return {
-      cache: previousCache,
-      freshness: emergency || !cacheIsFresh ? "stale" : "fresh",
+      cache,
+      freshness: emergency ? "stale" : "fresh",
       updateError: emergency ? EMERGENCY_SNAPSHOT_NOTICE : null,
     };
-  }
-  try {
-    const cache = await refreshCache(previousCache, forceRefresh, requiredGroup);
-    const emergency = cache.sourceUrl === TIMETABLE_EMERGENCY_SNAPSHOT_URL;
-    return { cache, freshness: emergency ? "stale" : "fresh", updateError: emergency ? EMERGENCY_SNAPSHOT_NOTICE : null };
   } catch (error) {
     const message = asErrorMessage(error);
     if (previousCache) return { cache: previousCache, freshness: "stale", updateError: message };
