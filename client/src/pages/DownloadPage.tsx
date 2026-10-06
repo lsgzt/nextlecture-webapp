@@ -97,7 +97,7 @@ export default function DownloadPage() {
                 <Download className="h-5 w-5" aria-hidden="true" />
                 Download APK
               </button>
-              <p className="text-center text-xs text-teal-100/75 sm:text-left">Starts downloading immediately — no extra page</p>
+              <p className="text-center text-xs text-teal-100/75 sm:text-left">Opens the official APK download page</p>
             </div>
           </div>
 
