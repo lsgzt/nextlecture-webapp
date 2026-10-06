@@ -2,7 +2,7 @@
  * Product settings deliberately kept in one place.
  * Replace ANDROID_APP_URL when the downloadable Android APK is ready.
  */
-export const ANDROID_APP_URL = "https://www.mediafire.com/file/c0p18d2b8e4zd5b/gndec-timetable.apk/file";
+export const ANDROID_APP_URL = "https://drive.google.com/file/d/13q_buENgEfzmxQ3On7Ibx4YR3HFJcspD/view?usp=drivesdk";
 
 /** Publicly served logo assets used by deployed headers and device icon metadata. */
 export const BRAND_LOGO_URL = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663345189289/xrndoJiVzCLAnaSr.png";
