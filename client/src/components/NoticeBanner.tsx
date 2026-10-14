@@ -86,7 +86,7 @@ export function NoticeBanner({
     <section className={className} aria-label="New official GNDEC notices">
       <div
         ref={scrollerRef}
-        className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain rounded-[1.5rem] scrollbar-none touch-pan-x"
+        className="flex h-52 snap-x snap-mandatory items-stretch gap-3 overflow-x-auto overscroll-x-contain rounded-[1.5rem] scrollbar-none touch-pan-x sm:h-56"
         onScroll={event => {
           const element = event.currentTarget;
           const width = element.clientWidth + 12;
@@ -105,7 +105,7 @@ export function NoticeBanner({
             href={notice.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="group relative flex min-h-40 w-full shrink-0 snap-center items-center gap-3 overflow-hidden rounded-[1.5rem] border border-amber-400/70 bg-amber-700 px-5 py-5 text-amber-50 shadow-lg shadow-amber-950/15 transition hover:bg-amber-800 active:scale-[0.995] dark:border-amber-500/45 dark:bg-amber-900/80 dark:text-amber-50 dark:hover:bg-amber-900"
+            className="group relative flex h-full min-h-0 w-full shrink-0 snap-center items-center gap-3 overflow-hidden rounded-[1.5rem] border border-amber-400/70 bg-amber-700 px-5 py-5 text-amber-50 shadow-lg shadow-amber-950/15 transition hover:bg-amber-800 active:scale-[0.995] dark:border-amber-500/45 dark:bg-amber-900/80 dark:text-amber-50 dark:hover:bg-amber-900"
           >
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-amber-500/30 text-amber-100 dark:bg-amber-500/25">
               <Megaphone className="h-5 w-5" aria-hidden="true" />
@@ -114,7 +114,7 @@ export function NoticeBanner({
               <span className="block text-[0.68rem] font-bold uppercase tracking-[0.15em] text-amber-100/85">
                 New · {notice.source || "GNDEC"}
               </span>
-              <span className="mt-1 block line-clamp-2 text-lg font-bold leading-7 tracking-[-0.02em] sm:text-xl">
+              <span className="mt-1 block max-h-[3.5rem] overflow-hidden text-lg font-bold leading-7 tracking-[-0.02em] sm:text-xl">
                 {notice.title}
               </span>
               <span className="mt-1.5 block text-sm text-amber-100/85">
