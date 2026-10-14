@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AnnouncementBanner } from "@/components/AnnouncementBanner";
+import { NoticeBanner } from "@/components/NoticeBanner";
 import { Expandable } from "@/components/Expandable";
 import { StudentProfileSetup } from "@/components/StudentProfileSetup";
 import { trpc } from "@/lib/trpc";
@@ -177,6 +178,7 @@ export default function TimetableApp() {
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const groupsQuery = trpc.timetable.groups.useQuery(undefined, { staleTime: 60 * 1000, refetchOnMount: "always", retry: 1 });
   const dashboardQuery = trpc.timetable.dashboard.useQuery({ group: selectedGroup ?? "ITB2" }, { enabled: Boolean(selectedGroup), staleTime: 60 * 1000, refetchOnMount: "always", retry: 1 });
+  const noticesQuery = trpc.campus.notices.useQuery(undefined, { staleTime: 5 * 60 * 1000, refetchOnMount: "always", retry: 1 });
   const refreshMutation = trpc.timetable.refresh.useMutation();
   const utils = trpc.useUtils();
 
@@ -341,6 +343,7 @@ export default function TimetableApp() {
           <Freshness fetchedAt={data?.fetchedAt ?? localTimetable?.fetchedAt} freshness={dashboardQuery.data?.freshness ?? (dashboardQuery.isError || data?.updateError ? "stale" : "fresh")} updateError={data?.updateError ?? (dashboardQuery.isError ? "Could not refresh" : null)} />
         </div>
       </section>
+      <NoticeBanner notices={noticesQuery.data?.notices ?? []} className="mb-3" />
       <AnnouncementBanner className="mb-3" />
       {data?.updateError && <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/25 dark:text-amber-100"><Info className="mt-0.5 h-4 w-4 shrink-0" /><span><strong>Couldn’t update the latest timetable.</strong> Your last working timetable is still available.</span></div>}
       {dashboardQuery.isError && !data && <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 dark:border-amber-900/60 dark:bg-amber-950/25"><AlertCircle className="h-5 w-5 text-amber-700 dark:text-amber-300" /><h2 className="mt-3 font-semibold">We couldn’t load this group.</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">The group may have changed in the official source. Choose another group or fetch again.</p><button type="button" onClick={() => setShowPicker(true)} className="mt-4 text-sm font-bold text-teal-700 underline underline-offset-4 dark:text-teal-300">Change timetable group</button></div>}
