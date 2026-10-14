@@ -49,6 +49,7 @@ export function NoticeBanner({
   );
   const [activeIndex, setActiveIndex] = useState(0);
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const autoAdvanceRef = useRef(false);
 
   useEffect(() => {
     const timer = window.setInterval(() => setToday(localDateKey()), 60_000);
@@ -64,6 +65,7 @@ export function NoticeBanner({
   useEffect(() => {
     if (activeNotices.length < 2) return;
     const timer = window.setInterval(() => {
+      autoAdvanceRef.current = true;
       setActiveIndex(index => (index + 1) % activeNotices.length);
     }, 5000);
     return () => window.clearInterval(timer);
@@ -72,11 +74,11 @@ export function NoticeBanner({
   useEffect(() => {
     const scroller = scrollerRef.current;
     if (!scroller || !activeNotices.length) return;
-    const card = scroller.children[activeIndex] as HTMLElement | undefined;
-    card?.scrollIntoView({
+    if (!autoAdvanceRef.current) return;
+    autoAdvanceRef.current = false;
+    scroller.scrollTo({
+      left: activeIndex * (scroller.clientWidth + 12),
       behavior: "smooth",
-      block: "nearest",
-      inline: "center",
     });
   }, [activeIndex, activeNotices.length]);
 
@@ -86,7 +88,7 @@ export function NoticeBanner({
     <section className={className} aria-label="New official GNDEC notices">
       <div
         ref={scrollerRef}
-        className="flex h-52 snap-x snap-mandatory items-stretch gap-3 overflow-x-auto overscroll-x-contain rounded-[1.5rem] scrollbar-none touch-pan-x sm:h-56"
+        className="flex snap-x snap-mandatory items-start gap-3 overflow-x-auto overscroll-x-contain rounded-[1.5rem] scroll-smooth scrollbar-none touch-pan-x"
         onScroll={event => {
           const element = event.currentTarget;
           const width = element.clientWidth + 12;
@@ -105,7 +107,7 @@ export function NoticeBanner({
             href={notice.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="group relative flex h-full min-h-0 w-full shrink-0 snap-center items-center gap-3 overflow-hidden rounded-[1.5rem] border border-amber-400/70 bg-amber-700 px-5 py-5 text-amber-50 shadow-lg shadow-amber-950/15 transition hover:bg-amber-800 active:scale-[0.995] dark:border-amber-500/45 dark:bg-amber-900/80 dark:text-amber-50 dark:hover:bg-amber-900"
+            className="group relative flex min-h-40 w-full shrink-0 snap-center items-center gap-3 overflow-hidden rounded-[1.5rem] border border-amber-400/70 bg-amber-700 px-5 py-5 text-amber-50 shadow-lg shadow-amber-950/15 transition hover:bg-amber-800 active:scale-[0.995] dark:border-amber-500/45 dark:bg-amber-900/80 dark:text-amber-50 dark:hover:bg-amber-900"
           >
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-amber-500/30 text-amber-100 dark:bg-amber-500/25">
               <Megaphone className="h-5 w-5" aria-hidden="true" />
