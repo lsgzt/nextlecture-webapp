@@ -128,7 +128,7 @@ function NoticeCard({ notice }: { notice: CampusNotice }) {
 
 export default function CampusPage() {
   const holidaysQuery = trpc.campus.holidays.useQuery(undefined, { staleTime: 10 * 60 * 1000, retry: 1 });
-  const noticesQuery = trpc.campus.notices.useQuery(undefined, { staleTime: 5 * 60 * 1000, retry: 1 });
+  const noticesQuery = trpc.campus.notices.useQuery({ forceRefresh: true }, { staleTime: 0, refetchOnMount: "always", retry: 1 });
   const utils = trpc.useUtils();
 
   const holidays = holidaysQuery.data?.holidays ?? [];
@@ -175,10 +175,12 @@ export default function CampusPage() {
               type="button"
               onClick={() => void refreshAll()}
               disabled={refreshing}
-              className="grid h-9 w-9 place-items-center rounded-xl border border-border bg-card text-muted-foreground transition hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700 disabled:opacity-60 dark:hover:border-teal-900 dark:hover:bg-teal-950/35 dark:hover:text-teal-300"
-              aria-label="Refresh"
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-card px-2.5 text-sm font-semibold text-muted-foreground transition hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700 disabled:opacity-60 dark:hover:border-teal-900 dark:hover:bg-teal-950/35 dark:hover:text-teal-300"
+              aria-label="Refresh notices and holidays"
+              title="Refresh notices and holidays"
             >
               {refreshing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              <span className="hidden sm:inline">Refresh</span>
             </button>
             <ThemeToggle />
           </div>

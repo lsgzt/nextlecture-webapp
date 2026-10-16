@@ -178,7 +178,7 @@ export default function TimetableApp() {
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const groupsQuery = trpc.timetable.groups.useQuery(undefined, { staleTime: 60 * 1000, refetchOnMount: "always", retry: 1 });
   const dashboardQuery = trpc.timetable.dashboard.useQuery({ group: selectedGroup ?? "ITB2" }, { enabled: Boolean(selectedGroup), staleTime: 60 * 1000, refetchOnMount: "always", retry: 1 });
-  const noticesQuery = trpc.campus.notices.useQuery(undefined, { staleTime: 5 * 60 * 1000, refetchOnMount: "always", retry: 1 });
+  const noticesQuery = trpc.campus.notices.useQuery({ forceRefresh: true }, { staleTime: 0, refetchOnMount: "always", retry: 1 });
   const refreshMutation = trpc.timetable.refresh.useMutation();
   const utils = trpc.useUtils();
 
