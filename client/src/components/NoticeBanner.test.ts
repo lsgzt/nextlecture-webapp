@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getActiveNoticeBanners } from "./NoticeBanner";
+import { compactNoticeTitle } from "./NoticeReader";
 import type { CampusNotice } from "@shared/campus";
 
 function notice(id: string, start: string, until = ""): CampusNotice {
@@ -16,6 +17,15 @@ function notice(id: string, start: string, until = ""): CampusNotice {
     bannerUntilDate: until,
   };
 }
+
+describe("compactNoticeTitle", () => {
+  it("adds an ellipsis only when the title is shortened", () => {
+    expect(compactNoticeTitle("Short title", 20)).toBe("Short title");
+    expect(compactNoticeTitle("A notice title that is too long", 20)).toBe(
+      "A notice title that..."
+    );
+  });
+});
 
 describe("getActiveNoticeBanners", () => {
   it("shows a notice on its arrival day and the following full day", () => {

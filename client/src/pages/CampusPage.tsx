@@ -19,6 +19,7 @@ import {
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { NoticeReader, compactNoticeTitle } from "@/components/NoticeReader";
 import { trpc } from "@/lib/trpc";
 
 function HolidaysPanel({
@@ -104,25 +105,25 @@ function HolidaysPanel({
   );
 }
 
-function NoticeCard({ notice }: { notice: CampusNotice }) {
+function NoticeCard({ notice, onOpen }: { notice: CampusNotice; onOpen: (notice: CampusNotice) => void }) {
   const sourceLabel = notice.author || notice.source;
   return (
-    <a
-      href={notice.url}
-      target="_blank"
-      rel="noreferrer"
-      className="flex items-start gap-3 rounded-2xl border border-border bg-card px-4 py-3.5 shadow-sm transition hover:border-teal-300 hover:bg-teal-50/40 active:scale-[0.995] dark:hover:border-teal-800 dark:hover:bg-teal-950/25"
+    <button
+      type="button"
+      onClick={() => onOpen(notice)}
+      aria-label={`Read full notice: ${notice.title}`}
+      className="flex items-start gap-3 rounded-2xl border border-border bg-card px-4 py-3.5 text-left shadow-sm transition hover:border-teal-300 hover:bg-teal-50/40 active:scale-[0.995] dark:hover:border-teal-800 dark:hover:bg-teal-950/25"
     >
       <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-teal-50 text-teal-700 dark:bg-teal-950/45 dark:text-teal-300">
         <Megaphone className="h-4 w-4" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="font-semibold leading-5 text-foreground">{notice.title}</p>
+        <p className="font-semibold leading-5 text-foreground">{compactNoticeTitle(notice.title, 110)}</p>
         <p className="mt-1 text-sm font-semibold text-teal-700 dark:text-teal-300">{notice.displayDate}</p>
         {sourceLabel ? <p className="mt-0.5 truncate text-xs text-muted-foreground">{sourceLabel}</p> : null}
       </div>
       <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
-    </a>
+    </button>
   );
 }
 
@@ -130,6 +131,7 @@ export default function CampusPage() {
   const holidaysQuery = trpc.campus.holidays.useQuery(undefined, { staleTime: 10 * 60 * 1000, retry: 1 });
   const noticesQuery = trpc.campus.notices.useQuery({ forceRefresh: true }, { staleTime: 0, refetchOnMount: "always", retry: 1 });
   const utils = trpc.useUtils();
+  const [selectedNotice, setSelectedNotice] = useState<CampusNotice | null>(null);
 
   const holidays = holidaysQuery.data?.holidays ?? [];
   const notices = noticesQuery.data?.notices ?? [];
@@ -227,7 +229,7 @@ export default function CampusPage() {
         {notices.length > 0 && (
           <div className="space-y-2.5">
             {notices.map(notice => (
-              <NoticeCard key={notice.id} notice={notice} />
+              <NoticeCard key={notice.id} notice={notice} onOpen={setSelectedNotice} />
             ))}
           </div>
         )}
@@ -247,6 +249,9 @@ export default function CampusPage() {
           View all previous notices on GNDEC official website
           <ExternalLink className="h-4 w-4" />
         </a>
+        {selectedNotice && (
+          <NoticeReader notice={selectedNotice} onClose={() => setSelectedNotice(null)} />
+        )}
       </main>
     </div>
   );

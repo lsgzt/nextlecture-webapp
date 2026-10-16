@@ -1,6 +1,7 @@
 import { ChevronRight, Megaphone } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CampusNotice } from "@shared/campus";
+import { NoticeReader, compactNoticeTitle } from "@/components/NoticeReader";
 
 function localDateKey(date = new Date()) {
   const year = date.getFullYear();
@@ -48,6 +49,9 @@ export function NoticeBanner({
     [notices, today]
   );
   const [activeIndex, setActiveIndex] = useState(0);
+  const [selectedNotice, setSelectedNotice] = useState<CampusNotice | null>(
+    null
+  );
   const scrollerRef = useRef<HTMLDivElement>(null);
   const autoAdvanceRef = useRef(false);
 
@@ -85,64 +89,72 @@ export function NoticeBanner({
   if (!activeNotices.length) return null;
 
   return (
-    <section className={className} aria-label="New official GNDEC notices">
-      <div
-        ref={scrollerRef}
-        className="flex snap-x snap-mandatory items-start gap-3 overflow-x-auto overscroll-x-contain rounded-[1.5rem] scroll-smooth scrollbar-none touch-pan-x"
-        onScroll={event => {
-          const element = event.currentTarget;
-          const width = element.clientWidth + 12;
-          const nextIndex = Math.round(element.scrollLeft / width);
-          if (
-            nextIndex !== activeIndex &&
-            nextIndex >= 0 &&
-            nextIndex < activeNotices.length
-          )
-            setActiveIndex(nextIndex);
-        }}
-      >
-        {activeNotices.map(notice => (
-          <a
-            key={notice.id}
-            href={notice.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group relative flex min-h-40 w-full shrink-0 snap-center items-center gap-3 overflow-hidden rounded-[1.5rem] border border-amber-400/70 bg-amber-700 px-5 py-5 text-amber-50 shadow-lg shadow-amber-950/15 transition hover:bg-amber-800 active:scale-[0.995] dark:border-amber-500/45 dark:bg-amber-900/80 dark:text-amber-50 dark:hover:bg-amber-900"
-          >
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-amber-500/30 text-amber-100 dark:bg-amber-500/25">
-              <Megaphone className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <span className="min-w-0 flex-1 pr-2">
-              <span className="block text-[0.68rem] font-bold uppercase tracking-[0.15em] text-amber-100/85">
-                New · {notice.source || "GNDEC"}
-              </span>
-              <span className="mt-1 block max-h-[3.5rem] overflow-hidden text-lg font-bold leading-7 tracking-[-0.02em] sm:text-xl">
-                {notice.title}
-              </span>
-              <span className="mt-1.5 block text-sm text-amber-100/85">
-                Tap to open official notice
-              </span>
-            </span>
-            <ChevronRight
-              className="h-6 w-6 shrink-0 text-amber-100 transition-transform group-hover:translate-x-1"
-              aria-hidden="true"
-            />
-          </a>
-        ))}
-      </div>
-      {activeNotices.length > 1 && (
+    <>
+      <section className={className} aria-label="New official GNDEC notices">
         <div
-          className="mt-2 flex justify-center gap-1.5"
-          aria-label={`${activeIndex + 1} of ${activeNotices.length} notices`}
+          ref={scrollerRef}
+          className="flex snap-x snap-mandatory items-start gap-3 overflow-x-auto overscroll-x-contain rounded-[1.5rem] scroll-smooth scrollbar-none touch-pan-x"
+          onScroll={event => {
+            const element = event.currentTarget;
+            const width = element.clientWidth + 12;
+            const nextIndex = Math.round(element.scrollLeft / width);
+            if (
+              nextIndex !== activeIndex &&
+              nextIndex >= 0 &&
+              nextIndex < activeNotices.length
+            )
+              setActiveIndex(nextIndex);
+          }}
         >
-          {activeNotices.map((notice, index) => (
-            <span
+          {activeNotices.map(notice => (
+            <button
               key={notice.id}
-              className={`h-1.5 w-10 rounded-full transition-colors ${index === activeIndex ? "bg-teal-500 dark:bg-teal-400" : "bg-muted"}`}
-            />
+              type="button"
+              onClick={() => setSelectedNotice(notice)}
+              aria-label={`Read full notice: ${notice.title}`}
+              className="group relative flex min-h-40 w-full shrink-0 snap-center items-center gap-3 overflow-hidden rounded-[1.5rem] border border-amber-400/70 bg-amber-700 px-5 py-5 text-left text-amber-50 shadow-lg shadow-amber-950/15 transition hover:bg-amber-800 active:scale-[0.995] dark:border-amber-500/45 dark:bg-amber-900/80 dark:text-amber-50 dark:hover:bg-amber-900"
+            >
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-amber-500/30 text-amber-100 dark:bg-amber-500/25">
+                <Megaphone className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span className="min-w-0 flex-1 pr-2">
+                <span className="block text-[0.68rem] font-bold uppercase tracking-[0.15em] text-amber-100/85">
+                  New · {notice.source || "GNDEC"}
+                </span>
+                <span className="mt-1 block max-h-[3.5rem] overflow-hidden text-lg font-bold leading-7 tracking-[-0.02em] sm:text-xl">
+                  {compactNoticeTitle(notice.title)}
+                </span>
+                <span className="mt-1.5 block text-sm text-amber-100/85">
+                  Tap to open official notice
+                </span>
+              </span>
+              <ChevronRight
+                className="h-6 w-6 shrink-0 text-amber-100 transition-transform group-hover:translate-x-1"
+                aria-hidden="true"
+              />
+            </button>
           ))}
         </div>
+        {activeNotices.length > 1 && (
+          <div
+            className="mt-2 flex justify-center gap-1.5"
+            aria-label={`${activeIndex + 1} of ${activeNotices.length} notices`}
+          >
+            {activeNotices.map((notice, index) => (
+              <span
+                key={notice.id}
+                className={`h-1.5 w-10 rounded-full transition-colors ${index === activeIndex ? "bg-teal-500 dark:bg-teal-400" : "bg-muted"}`}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+      {selectedNotice && (
+        <NoticeReader
+          notice={selectedNotice}
+          onClose={() => setSelectedNotice(null)}
+        />
       )}
-    </section>
+    </>
   );
 }
