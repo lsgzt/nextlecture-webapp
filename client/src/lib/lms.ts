@@ -1,7 +1,7 @@
 import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+const supabaseUrl = import.meta.env.VITE_LMS_SUPABASE_URL as string | undefined;
+const supabaseKey = import.meta.env.VITE_LMS_SUPABASE_PUBLISHABLE_KEY as string | undefined;
 
 export const lmsSupabase: SupabaseClient | null = supabaseUrl && supabaseKey
   ? createClient(supabaseUrl, supabaseKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } })
@@ -15,7 +15,7 @@ export type Course = { id: string; teacher_id: string; title: string; descriptio
 export type Video = { id: string; teacher_id: string; course_id: string; youtube_url: string; youtube_id: string; title: string; published: boolean; position: number; course?: Course; teacher?: Teacher };
 
 export function requireLmsClient() {
-  if (!lmsSupabase) throw new Error("LMS Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.");
+  if (!lmsSupabase) throw new Error("LMS Supabase is not configured. Add VITE_LMS_SUPABASE_URL and VITE_LMS_SUPABASE_PUBLISHABLE_KEY.");
   return lmsSupabase;
 }
 

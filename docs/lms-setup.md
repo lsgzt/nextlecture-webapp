@@ -7,8 +7,8 @@ The learning portal is implemented as a self-contained `/learn` route family ins
 Create a local `.env.local` or deployment environment with the following browser-safe values:
 
 ```env
-VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+VITE_LMS_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+VITE_LMS_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 ```
 
 Never put a Supabase secret/service-role key or a Resend API key in a `VITE_*` variable. The browser only needs the publishable key.
