@@ -5,7 +5,7 @@
 export const ANDROID_APP_URL = "https://drive.proton.me/urls/3PS5082VZ8#K582RXubhvLq";
 
 /** Publicly served logo assets used by deployed headers and device icon metadata. */
-export const BRAND_LOGO_URL = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663345189289/xrndoJiVzCLAnaSr.png";
+export const BRAND_LOGO_URL = "/nextlecture-logo.png";
 
 /** Permanent official GNDEC index, always attempted before any fallback source. */
 export const TIMETABLE_OFFICIAL_INDEX_URL = "https://appsc.gndec.ac.in/time_tables";

@@ -129,3 +129,351 @@
     animation: none;
   }
 }
+
+/* ============================================================
+   NextLecture Learn — UI system (scoped to .learn-scope)
+   A warm-paper, ink-and-moss editorial section.
+   ============================================================ */
+
+.learn-scope {
+  /* shadcn tokens pinned light — Learn reads as a bright paper section
+     even when the rest of the app is in dark mode */
+  --background: oklch(0.975 0.004 95);
+  --foreground: oklch(0.26 0.018 160);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.26 0.018 160);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.26 0.018 160);
+  --primary: oklch(0.46 0.072 170);
+  --primary-foreground: oklch(0.985 0.005 160);
+  --secondary: oklch(0.955 0.008 110);
+  --secondary-foreground: oklch(0.32 0.024 160);
+  --muted: oklch(0.955 0.008 100);
+  --muted-foreground: oklch(0.52 0.02 160);
+  --accent: oklch(0.93 0.028 165);
+  --accent-foreground: oklch(0.3 0.04 165);
+  --destructive: oklch(0.56 0.18 27);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.9 0.012 110);
+  --input: oklch(0.86 0.012 110);
+  --ring: oklch(0.5 0.08 170);
+  --radius: 0.9rem;
+
+  /* learn palette */
+  --l-paper: #F7F4EC;
+  --l-surface: #FFFFFF;
+  --l-ink: #1D2A23;
+  --l-ink-2: #4E5D54;
+  --l-ink-3: #7F8D84;
+  --l-green: #0D5E4D;
+  --l-green-deep: #0A4638;
+  --l-ink-panel: #0B392E;
+  --l-tint: #E4EDE6;
+  --l-tint-2: #F0F3EA;
+  --l-line: #E4DFD1;
+  --l-amber: #A6620F;
+  --l-amber-tint: #F6EBD7;
+  --l-shadow: 0 1px 2px rgba(29, 42, 35, 0.05), 0 18px 44px -22px rgba(29, 42, 35, 0.28);
+  --l-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer components {
+  /* page backdrop */
+  .learn-page {
+    min-height: 100vh;
+    background:
+      radial-gradient(56rem 30rem at 88% -12%, rgba(13, 94, 77, 0.055), transparent 62%),
+      radial-gradient(40rem 24rem at -12% 108%, rgba(166, 98, 15, 0.045), transparent 55%),
+      var(--l-paper);
+    color: var(--l-ink);
+  }
+
+  .learn-scope ::selection {
+    background: rgba(13, 94, 77, 0.18);
+  }
+
+  /* film grain for feature panels */
+  .learn-grain {
+    position: relative;
+    isolation: isolate;
+  }
+  .learn-grain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.13;
+    mix-blend-mode: overlay;
+    border-radius: inherit;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  }
+
+  /* mono eyebrow label */
+  .learn-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    font-weight: 500;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--l-ink-3);
+  }
+  .learn-eyebrow-strong {
+    color: var(--l-green);
+  }
+
+  /* text color helpers */
+  .t-ink { color: var(--l-ink); }
+  .t-ink2 { color: var(--l-ink-2); }
+  .t-ink3 { color: var(--l-ink-3); }
+  .t-green { color: var(--l-green); }
+
+  /* let truncated text shrink inside flex/grid tracks (mobile overflow fix) */
+  .learn-scope .truncate,
+  .learn-scope [class*="line-clamp"] {
+    min-width: 0;
+  }
+
+  /* nav link with sliding underline */
+  .learn-navlink {
+    position: relative;
+    color: var(--l-ink-2);
+    transition: color 180ms var(--l-ease);
+  }
+  .learn-navlink::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 100%;
+    bottom: -5px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--l-green);
+    transition: right 280ms var(--l-ease);
+  }
+  .learn-navlink:hover { color: var(--l-ink); }
+  .learn-navlink[data-active="true"] { color: var(--l-ink); }
+  .learn-navlink[data-active="true"]::after { right: 0; }
+
+  /* hand-drawn-feel inline link */
+  .learn-handlink {
+    color: var(--l-green);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    text-decoration-color: color-mix(in oklab, var(--l-green) 38%, transparent);
+    transition: text-decoration-color 180ms var(--l-ease), color 180ms var(--l-ease);
+  }
+  .learn-handlink:hover { text-decoration-color: var(--l-green); }
+
+  /* buttons */
+  .learn-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 2.75rem;
+    padding: 0 1.15rem;
+    border-radius: 0.9rem;
+    font-size: 0.875rem;
+    font-weight: 650;
+    letter-spacing: -0.005em;
+    border: 1px solid transparent;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    transition:
+      transform 160ms var(--l-ease),
+      background-color 180ms var(--l-ease),
+      border-color 180ms var(--l-ease),
+      color 180ms var(--l-ease),
+      box-shadow 200ms var(--l-ease);
+  }
+  .learn-btn:active:not(:disabled) { transform: translateY(1px) scale(0.985); }
+  .learn-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+  .learn-btn-primary {
+    background: var(--l-green);
+    color: #F3F8F3;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.14),
+      0 10px 22px -12px rgba(10, 70, 56, 0.65);
+  }
+  .learn-btn-primary:hover:not(:disabled) {
+    background: var(--l-green-deep);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.14),
+      0 14px 26px -12px rgba(10, 70, 56, 0.7);
+  }
+
+  .learn-btn-ghost {
+    background: var(--l-surface);
+    color: var(--l-ink);
+    border-color: var(--l-line);
+    box-shadow: 0 1px 2px rgba(29, 42, 35, 0.04);
+  }
+  .learn-btn-ghost:hover:not(:disabled) {
+    border-color: var(--l-green);
+    color: var(--l-green);
+  }
+
+  .learn-btn-quiet {
+    background: transparent;
+    color: var(--l-ink-2);
+    height: 2.5rem;
+  }
+  .learn-btn-quiet:hover:not(:disabled) {
+    color: var(--l-green);
+    background: rgba(13, 94, 77, 0.07);
+  }
+
+  /* cards */
+  .learn-card {
+    background: var(--l-surface);
+    border: 1px solid var(--l-line);
+    border-radius: 1.1rem;
+  }
+  .learn-card-interactive {
+    transition:
+      transform 260ms var(--l-ease),
+      box-shadow 260ms var(--l-ease),
+      border-color 260ms var(--l-ease);
+  }
+  .learn-card-interactive:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--l-shadow);
+    border-color: color-mix(in oklab, var(--l-green) 30%, var(--l-line));
+  }
+
+  /* video thumbnails */
+  .learn-thumb {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, #16302a, #0d5e4d);
+  }
+  .learn-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 520ms var(--l-ease);
+  }
+  .learn-thumb-veil {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(to top, rgba(9, 34, 28, 0.6), rgba(9, 34, 28, 0.06) 46%, transparent 72%);
+  }
+  .learn-playchip {
+    display: grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 999px;
+    background: rgba(252, 252, 248, 0.94);
+    color: var(--l-green-deep);
+    box-shadow: 0 10px 26px -10px rgba(4, 22, 17, 0.8);
+    transition: transform 300ms var(--l-ease), background-color 200ms var(--l-ease);
+  }
+  .group:hover .learn-playchip {
+    transform: scale(1.1);
+    background: #ffffff;
+  }
+
+  /* form controls */
+  .learn-input {
+    width: 100%;
+    height: 3rem;
+    border-radius: 0.9rem;
+    border: 1px solid var(--l-line);
+    background: var(--l-surface);
+    padding: 0 0.95rem;
+    font-size: 0.925rem;
+    color: var(--l-ink);
+    transition: border-color 180ms var(--l-ease), box-shadow 180ms var(--l-ease);
+  }
+  .learn-input::placeholder { color: var(--l-ink-3); }
+  .learn-input:focus {
+    outline: none;
+    border-color: var(--l-green);
+    box-shadow: 0 0 0 4px rgba(13, 94, 77, 0.13);
+  }
+  textarea.learn-input {
+    height: auto;
+    min-height: 5.5rem;
+    padding: 0.7rem 0.95rem;
+    resize: vertical;
+    line-height: 1.55;
+  }
+  .learn-select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%234E5D54' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.95rem center;
+    padding-right: 2.6rem;
+  }
+
+  /* dashed rule */
+  .learn-rule {
+    border: 0;
+    border-top: 1px dashed color-mix(in oklab, var(--l-ink-3) 45%, transparent);
+  }
+
+  /* pill chip */
+  .learn-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 999px;
+    border: 1px solid var(--l-line);
+    padding: 0.28rem 0.7rem;
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--l-ink-2);
+    background: var(--l-surface);
+    white-space: nowrap;
+  }
+
+  /* thin scrollbar for side lists */
+  .learn-scrolly {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--l-ink-3) 45%, transparent) transparent;
+  }
+  .learn-scrolly::-webkit-scrollbar { width: 6px; height: 6px; }
+  .learn-scrolly::-webkit-scrollbar-track { background: transparent; }
+  .learn-scrolly::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--l-ink-3) 40%, transparent);
+    border-radius: 99px;
+  }
+
+  /* shimmer skeletons */
+  .learn-shimmer {
+    position: relative;
+    overflow: hidden;
+    border-radius: 0.55rem;
+    background: color-mix(in oklab, var(--l-ink-3) 13%, transparent);
+  }
+  .learn-shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+    animation: learn-shimmer 1.7s var(--l-ease) infinite;
+  }
+  @keyframes learn-shimmer {
+    100% { transform: translateX(100%); }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .learn-card-interactive,
+  .learn-thumb img,
+  .learn-playchip,
+  .learn-navlink::after {
+    transition-duration: 0.01ms !important;
+  }
+  .learn-shimmer::after { animation: none; }
+}

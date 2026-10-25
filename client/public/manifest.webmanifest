@@ -7,6 +7,11 @@
   "background_color": "#f7f8f6",
   "theme_color": "#0d9488",
   "icons": [
-    { "src": "https://files.manuscdn.com/user_upload_by_module/session_file/310519663345189289/ZLiwlhAqhRunQonq.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    {
+      "src": "/nextlecture-logo-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
   ]
 }

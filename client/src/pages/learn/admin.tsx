@@ -1,0 +1,398 @@
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "wouter";
+import { ArrowUpRight, Sparkles } from "lucide-react";
+import { toast } from "sonner";
+import {
+  demoTeacher,
+  getSession,
+  getTeacher,
+  listCourses,
+  lmsDemo,
+  lmsSupabase,
+  type Course,
+  type Teacher,
+  type Video,
+} from "@/lib/lms";
+import { EmptyState, Monogram, Reveal } from "./parts";
+import { LearnShell } from "./shell";
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="learn-eyebrow mb-1.5 block">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function StatCard({ eyebrow, value, hint }: { eyebrow: string; value: React.ReactNode; hint?: string }) {
+  return (
+    <div className="learn-card p-6">
+      <p className="learn-eyebrow">{eyebrow}</p>
+      <div className="mt-3 flex items-baseline gap-2">
+        <span className="font-display text-[2.4rem] leading-none font-semibold text-[var(--l-ink)]">{value}</span>
+        {hint && <span className="text-[0.78rem] text-[var(--l-ink-3)]">{hint}</span>}
+      </div>
+    </div>
+  );
+}
+
+export function Admin() {
+  const [teacher, setTeacher] = useState<Teacher | null>(null);
+  const [courses, setCourses] = useState<Course[] | null>(null);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [courseId, setCourseId] = useState("");
+  const [newCourse, setNewCourse] = useState(false);
+  const [newCourseTitle, setNewCourseTitle] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [fetchingTitle, setFetchingTitle] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const session = lmsDemo ? null : await getSession().catch(() => null);
+      const email = session?.user.email ?? demoTeacher.email;
+      const profile = await getTeacher(email);
+      if (!active) return;
+      setTeacher(profile);
+      const all = await listCourses();
+      if (!active) return;
+      setCourses(all.filter((course) => course.teacher_id === profile?.id));
+    })().catch(() => toast.error("Could not load the studio"));
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const totalLessons = useMemo(
+    () => (courses ?? []).reduce((sum, course) => sum + (course.videos?.length ?? 0), 0),
+    [courses],
+  );
+
+  async function fetchTitle() {
+    if (!youtubeUrl.trim() || fetchingTitle) return;
+    setFetchingTitle(true);
+    try {
+      const response = await fetch("/api/lms/youtube-metadata", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: youtubeUrl }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message);
+      setTitle(data.title);
+      toast.success("YouTube title found");
+    } catch (error: any) {
+      toast.error(error.message ?? "Could not read that YouTube URL");
+    } finally {
+      setFetchingTitle(false);
+    }
+  }
+
+  async function publish(event: React.FormEvent) {
+    event.preventDefault();
+    if (!teacher || busy) return;
+    setBusy(true);
+    try {
+      const parsed = new URL(youtubeUrl);
+      const youtubeId = parsed.searchParams.get("v") ?? parsed.pathname.split("/").filter(Boolean).pop();
+      if (!youtubeId || !title.trim() || (!newCourse && !courseId)) {
+        throw new Error("Add a YouTube URL, a title, and a course.");
+      }
+
+      if (lmsDemo) {
+        // Sample mode — simulate the insert locally so the flow stays explorable.
+        const nowId = `demo-${Date.now()}`;
+        let updated = courses ?? [];
+        if (newCourse) {
+          const fresh: Course = {
+            id: nowId,
+            teacher_id: teacher.id,
+            title: newCourseTitle,
+            description,
+            published: true,
+            teacher,
+            videos: [],
+          };
+          updated = [fresh, ...updated];
+        } else {
+          updated = updated.map((course) =>
+            course.id === courseId
+              ? {
+                  ...course,
+                  videos: [
+                    ...(course.videos ?? []),
+                    {
+                      id: nowId,
+                      teacher_id: teacher.id,
+                      course_id: course.id,
+                      youtube_url: youtubeUrl,
+                      youtube_id: youtubeId,
+                      title,
+                      published: true,
+                      position: (course.videos?.length ?? 0) + 1,
+                      course,
+                      teacher,
+                    } as Video,
+                  ],
+                }
+              : course,
+          );
+        }
+        setCourses(updated);
+        toast.success("Lesson published (sample mode)");
+        setTitle("");
+        setYoutubeUrl("");
+        setDescription("");
+        setNewCourse(false);
+        setNewCourseTitle("");
+        setCourseId("");
+        return;
+      }
+
+      if (!lmsSupabase) throw new Error("LMS is not configured.");
+      let targetCourse = courseId;
+      if (newCourse) {
+        const { data, error } = await lmsSupabase
+          .from("lms_courses")
+          .insert({ teacher_id: teacher.id, title: newCourseTitle, description })
+          .select("id")
+          .single();
+        if (error) throw error;
+        targetCourse = data.id;
+      }
+      const { error } = await lmsSupabase.from("lms_videos").insert({
+        teacher_id: teacher.id,
+        course_id: targetCourse,
+        youtube_url: youtubeUrl,
+        youtube_id: youtubeId,
+        title,
+        published: true,
+      });
+      if (error) throw error;
+      toast.success("Lesson published");
+      setTitle("");
+      setYoutubeUrl("");
+      setDescription("");
+      setNewCourse(false);
+      setNewCourseTitle("");
+      setCourseId("");
+      const all = await listCourses();
+      setCourses(all.filter((course) => course.teacher_id === teacher.id));
+    } catch (error: any) {
+      toast.error(error.message ?? "Could not publish lesson");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const firstName = (teacher?.name ?? "").replace(/^(Dr\.|Prof\.)\s+/, "").split(" ")[0] || "there";
+
+  return (
+    <LearnShell
+      role="teacher"
+      eyebrow="Teacher studio"
+      title={`${greeting}, ${firstName}.`}
+      description="Everything you publish here is live for the first-years within moments."
+      headAside={
+        teacher && (
+          <span className="hidden items-center gap-2.5 rounded-full border border-[var(--l-line)] bg-[var(--l-surface)] py-1 pl-1 pr-3.5 sm:flex">
+            <Monogram name={teacher.name} className="h-7 w-7 text-[0.6rem]" />
+            <span className="text-[0.8rem] font-medium">{teacher.name}</span>
+          </span>
+        )
+      }
+    >
+      {courses === null ? (
+        <div className="grid gap-5 sm:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="learn-card p-6">
+              <div className="learn-shimmer h-2.5 w-24" />
+              <div className="learn-shimmer mt-4 h-10 w-16" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <>
+          <Reveal>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <StatCard eyebrow="Courses published" value={String(courses.length).padStart(2, "0")} />
+              <StatCard eyebrow="Lessons live" value={String(totalLessons).padStart(2, "0")} hint="across all courses" />
+              <Link href="/learn/courses" className="learn-card learn-card-interactive group flex items-center justify-between p-6">
+                <div>
+                  <p className="learn-eyebrow">Public side</p>
+                  <p className="mt-2 font-display text-[1.2rem] font-semibold text-[var(--l-ink)]">See what students see</p>
+                </div>
+                <span className="grid h-10 w-10 place-items-center rounded-full border border-[var(--l-line)] bg-[var(--l-surface)] text-[var(--l-green)] transition-transform duration-300 group-hover:-rotate-45">
+                  <ArrowUpRight size={16} />
+                </span>
+              </Link>
+            </div>
+          </Reveal>
+
+          <div className="mt-10 grid gap-6 lg:grid-cols-[1fr_380px]">
+            {/* ——— your library ——— */}
+            <section className="min-w-0">
+              <Reveal>
+                <div className="mb-5 flex items-end justify-between gap-3">
+                  <div>
+                    <p className="learn-eyebrow">Your library</p>
+                    <h2 className="mt-2 font-display text-[1.4rem] font-semibold tracking-[-0.01em] text-[var(--l-ink)]">
+                      Published courses
+                    </h2>
+                  </div>
+                  <span className="font-mono text-[0.66rem] tracking-[0.16em] text-[var(--l-ink-3)] uppercase">
+                    {String(courses.length).padStart(2, "0")}
+                  </span>
+                </div>
+              </Reveal>
+              <div className="space-y-4">
+                {courses.map((course, index) => (
+                  <Reveal key={course.id} delay={0.05 * index}>
+                    <article className="learn-card learn-card-interactive flex items-start justify-between gap-4 p-5">
+                      <div className="min-w-0">
+                        <p className="font-mono text-[0.62rem] tracking-[0.14em] text-[var(--l-ink-3)] uppercase">
+                          {String(index + 1).padStart(2, "0")} · course
+                        </p>
+                        <h3 className="mt-1.5 font-display text-[1.15rem] font-semibold leading-snug text-[var(--l-ink)]">
+                          {course.title}
+                        </h3>
+                        <p className="mt-1 text-[0.8rem] text-[var(--l-ink-3)]">
+                          {course.videos?.length ?? 0} published lessons
+                        </p>
+                        {course.videos && course.videos.length > 0 && (
+                          <p className="mt-2.5 line-clamp-1 text-[0.78rem] text-[var(--l-ink-2)]">
+                            <span className="text-[var(--l-ink-3)]">Latest · </span>
+                            {course.videos[course.videos.length - 1].title}
+                          </p>
+                        )}
+                      </div>
+                      <Link
+                        href={`/learn/courses?course=${course.id}`}
+                        title="Open in catalogue"
+                        aria-label={`Open ${course.title} in the catalogue`}
+                        className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[var(--l-line)] bg-[var(--l-surface)] text-[var(--l-ink-2)] transition-colors hover:border-[var(--l-green)] hover:text-[var(--l-green)]"
+                      >
+                        <ArrowUpRight size={15} />
+                      </Link>
+                    </article>
+                  </Reveal>
+                ))}
+                {courses.length === 0 && (
+                  <EmptyState
+                    icon={Sparkles}
+                    title="No courses yet"
+                    hint="Publish your first lesson — a course is created automatically when you choose a new title on the right."
+                  />
+                )}
+              </div>
+            </section>
+
+            {/* ——— publish form ——— */}
+            <Reveal delay={0.1}>
+              <aside className="learn-card h-fit p-6 lg:sticky lg:top-24">
+                <p className="learn-eyebrow">New lesson</p>
+                <h2 className="mt-2 font-display text-[1.3rem] font-semibold text-[var(--l-ink)]">Publish a lesson</h2>
+                <p className="mt-1.5 text-[0.8rem] leading-relaxed text-[var(--l-ink-3)]">
+                  Paste an unlisted YouTube link — the title is fetched for you.
+                </p>
+
+                <form onSubmit={publish} className="mt-6 space-y-4">
+                  <Field label="YouTube URL">
+                    <input
+                      value={youtubeUrl}
+                      onChange={(event) => setYoutubeUrl(event.target.value)}
+                      onBlur={fetchTitle}
+                      required
+                      type="url"
+                      placeholder="https://youtube.com/watch?v=…"
+                      className="learn-input"
+                    />
+                  </Field>
+
+                  <Field label="Lesson title">
+                    <div className="flex gap-2">
+                      <input
+                        value={title}
+                        onChange={(event) => setTitle(event.target.value)}
+                        required
+                        placeholder="Lecture 05 — …"
+                        className="learn-input min-w-0 flex-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={fetchTitle}
+                        disabled={fetchingTitle}
+                        className="learn-btn learn-btn-ghost h-12 shrink-0 px-4 text-[0.8rem]"
+                      >
+                        {fetchingTitle ? "…" : "Fetch"}
+                      </button>
+                    </div>
+                  </Field>
+
+                  {newCourse ? (
+                    <>
+                      <Field label="New course title">
+                        <input
+                          value={newCourseTitle}
+                          onChange={(event) => setNewCourseTitle(event.target.value)}
+                          required
+                          placeholder="Course name"
+                          className="learn-input"
+                        />
+                      </Field>
+                      <Field label="Course description">
+                        <textarea
+                          value={description}
+                          onChange={(event) => setDescription(event.target.value)}
+                          placeholder="One or two lines students will see in the catalogue."
+                          className="learn-input"
+                        />
+                      </Field>
+                    </>
+                  ) : (
+                    <Field label="Course">
+                      <select
+                        value={courseId}
+                        onChange={(event) => setCourseId(event.target.value)}
+                        required
+                        className="learn-input learn-select"
+                      >
+                        <option value="">Choose an existing course…</option>
+                        {courses.map((course) => (
+                          <option key={course.id} value={course.id}>
+                            {course.title}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setNewCourse((value) => !value)}
+                    className="learn-handlink text-[0.8rem] font-medium"
+                  >
+                    {newCourse ? "← Use an existing course instead" : "+ Start a new course instead"}
+                  </button>
+
+                  <button type="submit" disabled={busy} className="learn-btn learn-btn-primary h-12 w-full">
+                    {busy ? "Publishing…" : "Publish lesson"}
+                  </button>
+                </form>
+
+                <p className="mt-4 text-[0.7rem] leading-5 text-[var(--l-ink-3)]">
+                  Students see published lessons immediately. Keep videos unlisted on YouTube if you want the portal to be the only door in.
+                </p>
+              </aside>
+            </Reveal>
+          </div>
+        </>
+      )}
+    </LearnShell>
+  );
+}
