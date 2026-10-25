@@ -6,6 +6,7 @@ import { Teachers, TeacherDetail } from "./learn/teachers";
 import { Courses } from "./learn/courses";
 import { Watch } from "./learn/watch";
 import { Admin } from "./learn/admin";
+import { Profile } from "./learn/profile";
 
 export default function Learn() {
   const [path] = useLocation();
@@ -19,6 +20,7 @@ export default function Learn() {
   else if (paramsWatch?.id) page = <Watch id={paramsWatch.id} />;
   else if (paramsTeacher?.id) page = <TeacherDetail id={paramsTeacher.id} />;
   else if (path === "/learn/teachers") page = <Teachers />;
+  else if (path === "/learn/profile") page = <Profile />;
   else if (path.startsWith("/learn/courses")) page = <Courses />;
   else page = <Dashboard />;
 

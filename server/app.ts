@@ -8,6 +8,7 @@ import { registerStorageProxy } from "./_core/storageProxy";
 import { getOfficialSyllabusPdfBuffer } from "./syllabus";
 import { createServerFallbackGeminiResponse, getConfiguredGeminiApiKey } from "./syllabusGemini";
 import { createAttendanceProxyHandler } from "./attendanceProxy";
+import { getAndroidStudentDirectory } from "./androidProfileRecovery";
 import { registerFcmToken, runNotificationCheck, sendCustomNotification } from "./notifications";
 import { refreshExternalCaches } from "./cacheRefresh";
 
@@ -235,6 +236,30 @@ export function createApp() {
     } catch (error) {
       console.error("[LMS dev-login] failed:", error instanceof Error ? error.message : error);
       res.status(500).json({ message: "Dev sign-in failed. Try again shortly." });
+    }
+  });
+  // Official first-year section list (the same public directory the Android app
+  // ships with). Only the single requested CRN's record is returned — students
+  // use it to see their registration number, subsection, mentor and venue.
+  app.get("/api/lms/directory", async (req, res) => {
+    try {
+      const crn = typeof req.query?.crn === "string" ? req.query.crn.trim() : "";
+      if (!crn || !/^[0-9A-Za-z-]{3,20}$/.test(crn)) {
+        res.status(400).json({ message: "Please provide a valid CRN." });
+        return;
+      }
+      const records = await getAndroidStudentDirectory();
+      const normalize = (value: string | undefined) => (value ?? "").trim().toUpperCase();
+      const record = records.find((item) => normalize(item.crn) === crn.toUpperCase()) ?? null;
+      if (!record) {
+        res.status(404).json({ message: "No official record found for that CRN." });
+        return;
+      }
+      res.setHeader("Cache-Control", "public, max-age=3600, s-maxage=21600");
+      res.json(record);
+    } catch (error) {
+      console.error("[LMS directory] lookup failed:", error instanceof Error ? error.message : error);
+      res.status(502).json({ message: "The official section list is unavailable right now." });
     }
   });
   app.use(

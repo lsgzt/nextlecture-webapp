@@ -22,6 +22,22 @@ export type Course = { id: string; teacher_id: string; title: string; descriptio
 export type Video = { id: string; teacher_id: string; course_id: string; youtube_url: string; youtube_id: string; title: string; published: boolean; position: number; course?: Course; teacher?: Teacher };
 export type ProgressRow = { student_email: string; video_id: string; watched_seconds: number; completed: boolean; last_watched_at: string };
 
+/** One record from the official first-year section list (matched by CRN). */
+export type OfficialRecord = {
+  crn: string;
+  registrationNumber: string;
+  candidateName: string;
+  fatherName: string;
+  motherName: string;
+  branch: string;
+  section: string;
+  subsection: string;
+  group: string;
+  mentorName: string;
+  mentorMobile: string;
+  venue: string;
+};
+
 export function requireLmsClient() {
   if (!lmsSupabase) throw new Error("LMS Supabase is not configured. Add VITE_LMS_SUPABASE_URL and VITE_LMS_SUPABASE_PUBLISHABLE_KEY.");
   return lmsSupabase;
@@ -37,6 +53,22 @@ export const demoStudent: Student = {
   crn: "23102847",
   branch: "Computer Science & Engineering",
   section: "CSE-B",
+};
+
+/** Sample section-list record that matches the demo student's CRN. */
+export const demoOfficialRecord: OfficialRecord = {
+  crn: "23102847",
+  registrationNumber: "23104016",
+  candidateName: "Arjun Mehta",
+  fatherName: "Harjeet Mehta",
+  motherName: "Simran Mehta",
+  branch: "CS",
+  section: "CSA",
+  subsection: "CSA2",
+  group: "CSAM2",
+  mentorName: "Dr. Navjot Kaur",
+  mentorMobile: "9815500123",
+  venue: "Data Structures Lab",
 };
 
 export const demoTeachers: Teacher[] = [
@@ -211,6 +243,19 @@ export async function getTeacher(email: string) {
   const { data, error } = await requireLmsClient().from("lms_teachers").select("id,name,email,department,subject").eq("email", email.toLowerCase()).maybeSingle();
   if (error) throw error;
   return data as Teacher | null;
+}
+
+/**
+ * The student's record from the official first-year section list, matched by
+ * CRN through our server (which caches the public directory). Returns null when
+ * the list is unreachable or the CRN has no match — callers degrade quietly.
+ */
+export async function getOfficialRecord(crn: string) {
+  if (lmsDemo) return crn.trim() === demoOfficialRecord.crn ? demoOfficialRecord : null;
+  const response = await fetch(`/api/lms/directory?crn=${encodeURIComponent(crn.trim())}`);
+  if (!response.ok) return null;
+  const data = (await response.json().catch(() => null)) as OfficialRecord | null;
+  return data && typeof data.crn === "string" ? data : null;
 }
 
 export async function listTeachers() {

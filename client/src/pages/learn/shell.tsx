@@ -86,6 +86,7 @@ function MobileMenu({ identity, onNavigate }: { identity: Identity; onNavigate: 
     { href: "/learn/courses", label: "Courses" },
     { href: "/learn/teachers", label: "Teachers" },
     ...(isTeacher ? [{ href: "/learn/admin", label: "Teacher studio" }] : []),
+    ...(!isTeacher ? [{ href: "/learn/profile", label: "Your profile" }] : []),
   ];
   return (
     <motion.div
@@ -218,15 +219,27 @@ export function LearnShell({
             <NavLink href="/learn" label="Overview" />
             <NavLink href="/learn/courses" label="Courses" />
             <NavLink href="/learn/teachers" label="Teachers" />
+            {!isTeacher && <NavLink href="/learn/profile" label="Profile" />}
             {isTeacher && <NavLink href="/learn/admin" label="Studio" />}
           </nav>
 
           <div className="flex items-center gap-2.5">
             {identity.demo && <DemoBadge />}
-            <span className="hidden items-center gap-2.5 rounded-full border border-[var(--l-line)] bg-[var(--l-surface)] py-1 pl-1 pr-3.5 md:flex">
-              <Monogram name={displayName} className="h-7 w-7 text-[0.6rem]" />
-              <span className="max-w-32 truncate text-[0.8rem] font-medium text-[var(--l-ink)]">{displayName}</span>
-            </span>
+            {identity.student ? (
+              <Link
+                href="/learn/profile"
+                title="View your student profile"
+                className="hidden items-center gap-2.5 rounded-full border border-[var(--l-line)] bg-[var(--l-surface)] py-1 pl-1 pr-3.5 transition-colors hover:border-[var(--l-green)]/45 md:flex"
+              >
+                <Monogram name={displayName} className="h-7 w-7 text-[0.6rem]" />
+                <span className="max-w-32 truncate text-[0.8rem] font-medium text-[var(--l-ink)]">{displayName}</span>
+              </Link>
+            ) : (
+              <span className="hidden items-center gap-2.5 rounded-full border border-[var(--l-line)] bg-[var(--l-surface)] py-1 pl-1 pr-3.5 md:flex">
+                <Monogram name={displayName} className="h-7 w-7 text-[0.6rem]" />
+                <span className="max-w-32 truncate text-[0.8rem] font-medium text-[var(--l-ink)]">{displayName}</span>
+              </span>
+            )}
             <button
               onClick={logout}
               title="Sign out"

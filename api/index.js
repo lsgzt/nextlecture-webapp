@@ -1,6 +1,7 @@
 // server/app.ts
 import express from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
+import { createClient as createClient2 } from "@supabase/supabase-js";
 
 // server/routers.ts
 import { TRPCError as TRPCError3 } from "@trpc/server";
@@ -3306,6 +3307,101 @@ function createApp() {
       res.json({ title: metadata.title, author: metadata.author_name ?? null });
     } catch {
       res.status(400).json({ message: "Please enter a valid YouTube video URL." });
+    }
+  });
+  app2.post("/api/lms/dev-login", async (req, res) => {
+    try {
+      const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+      if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        res.status(400).json({ message: "Please provide a valid email address." });
+        return;
+      }
+      const serviceKey = process.env.LMS_SUPABASE_SERVICE_KEY;
+      const supabaseUrl = process.env.LMS_SUPABASE_URL || process.env.VITE_LMS_SUPABASE_URL;
+      if (!serviceKey || !supabaseUrl) {
+        res.status(503).json({
+          message: "Dev sign-in is not configured on the server. Add LMS_SUPABASE_SERVICE_KEY to the environment."
+        });
+        return;
+      }
+      const admin = createClient2(supabaseUrl, serviceKey, {
+        auth: { autoRefreshToken: false, persistSession: false }
+      });
+      const [students, teachers] = await Promise.all([
+        admin.from("lms_students").select("email").eq("email", email).maybeSingle(),
+        admin.from("lms_teachers").select("email").eq("email", email).maybeSingle()
+      ]);
+      const role = students.data ? "student" : teachers.data ? "teacher" : null;
+      if (!role) {
+        res.status(403).json({ message: "Only first-year students and approved teachers can access this portal." });
+        return;
+      }
+      const devPassword = "nextlecture-dev-2026";
+      const created = await admin.auth.admin.createUser({
+        email,
+        password: devPassword,
+        email_confirm: true
+      });
+      if (created.error) {
+        const message = created.error.message ?? "";
+        if (!/already (been )?registered|already exists/i.test(message)) {
+          console.error("[LMS dev-login] createUser failed:", message);
+          res.status(502).json({ message: "Supabase could not prepare your account. Try again shortly." });
+          return;
+        }
+        let page = 1;
+        let userId = null;
+        while (userId === null) {
+          const list = await admin.auth.admin.listUsers({ page, perPage: 1e3 });
+          if (list.error) {
+            console.error("[LMS dev-login] listUsers failed:", list.error.message);
+            break;
+          }
+          const match = list.data?.users?.find((user) => (user.email ?? "").toLowerCase() === email);
+          if (match) {
+            userId = match.id;
+            break;
+          }
+          const nextPage = list.data?.nextPage ?? null;
+          if (nextPage === null) break;
+          page = nextPage;
+        }
+        if (userId === null) {
+          res.status(502).json({ message: "Could not find your account in Supabase. Try again shortly." });
+          return;
+        }
+        const updated = await admin.auth.admin.updateUserById(userId, { password: devPassword, email_confirm: true });
+        if (updated.error) {
+          console.error("[LMS dev-login] updateUserById failed:", updated.error.message);
+          res.status(502).json({ message: "Supabase could not update your account. Try again shortly." });
+          return;
+        }
+      }
+      res.json({ ok: true, role });
+    } catch (error) {
+      console.error("[LMS dev-login] failed:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Dev sign-in failed. Try again shortly." });
+    }
+  });
+  app2.get("/api/lms/directory", async (req, res) => {
+    try {
+      const crn = typeof req.query?.crn === "string" ? req.query.crn.trim() : "";
+      if (!crn || !/^[0-9A-Za-z-]{3,20}$/.test(crn)) {
+        res.status(400).json({ message: "Please provide a valid CRN." });
+        return;
+      }
+      const records = await getAndroidStudentDirectory();
+      const normalize2 = (value) => (value ?? "").trim().toUpperCase();
+      const record = records.find((item) => normalize2(item.crn) === crn.toUpperCase()) ?? null;
+      if (!record) {
+        res.status(404).json({ message: "No official record found for that CRN." });
+        return;
+      }
+      res.setHeader("Cache-Control", "public, max-age=3600, s-maxage=21600");
+      res.json(record);
+    } catch (error) {
+      console.error("[LMS directory] lookup failed:", error instanceof Error ? error.message : error);
+      res.status(502).json({ message: "The official section list is unavailable right now." });
     }
   });
   app2.use(

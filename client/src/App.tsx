@@ -34,6 +34,7 @@ function Router() {
       <Route path="/learn/teachers" component={Learn} />
       <Route path="/learn/teachers/:id" component={Learn} />
       <Route path="/learn/courses" component={Learn} />
+      <Route path="/learn/profile" component={Learn} />
       <Route path="/learn/watch/:id" component={Learn} />
       <Route path="/learn/admin" component={Learn} />
       <Route path="/404" component={NotFound} />

@@ -193,6 +193,25 @@ export function Dashboard() {
                     <ArrowUpRight size={16} />
                   </span>
                 </Link>
+
+                <Link
+                  href="/learn/profile"
+                  className="learn-card learn-card-interactive group flex items-center justify-between gap-4 p-6"
+                  title="Name, CRN, section — your record on the roster"
+                >
+                  <div className="min-w-0">
+                    <p className="learn-eyebrow">Your record</p>
+                    <p className="mt-2 truncate font-mono text-[1.05rem] font-semibold tracking-[0.04em] text-[var(--l-ink)]">
+                      CRN {student?.crn ?? "—"}
+                    </p>
+                    <p className="mt-1 truncate text-[0.78rem] text-[var(--l-ink-2)]">
+                      {student ? `${student.branch} · Section ${student.section}` : "View your student profile"}
+                    </p>
+                  </div>
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[var(--l-line)] bg-[var(--l-surface)] text-[var(--l-green)] transition-transform duration-300 group-hover:-rotate-45">
+                    <ArrowUpRight size={16} />
+                  </span>
+                </Link>
               </div>
             </div>
           </Reveal>
