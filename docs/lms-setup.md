@@ -1,0 +1,49 @@
+# NextLecture LMS setup
+
+The learning portal is implemented as a self-contained `/learn` route family inside the existing Vite/React application. It uses the existing Supabase project named `lms`, Supabase Auth email OTP, Supabase Postgres with Row Level Security, Supabase Realtime for reactions, and unlisted YouTube embeds.
+
+## Environment variables
+
+Create a local `.env.local` or deployment environment with the following browser-safe values:
+
+```env
+VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+```
+
+Never put a Supabase secret/service-role key or a Resend API key in a `VITE_*` variable. The browser only needs the publishable key.
+
+## Supabase Auth and Resend
+
+The login flow first calls the database function `lms_login_lookup`. An OTP is sent only when the email belongs to either `lms_students` or `lms_teachers`. Configure the email provider in the Supabase dashboard under **Authentication → SMTP Settings** using the Resend SMTP credentials for the verified sending domain. The Supabase Auth email template should contain the OTP token variable supported by the current dashboard template.
+
+Also add the local and deployed site URLs under **Authentication → URL Configuration**. At minimum, include the deployed origin and the local development origin used for testing.
+
+## Database
+
+The following files are applied to the `lms` project:
+
+- `supabase/migrations/202610250001_lms_core.sql` creates the LMS tables, RLS policies, reaction-count function, indexes, and Realtime publication entry.
+- `supabase/seed_lms.sql` upserts the supplied first-year roster and the two initial teachers.
+- `supabase/migrations/202610250002_lms_login_lookup.sql` creates the anonymous pre-OTP eligibility lookup.
+- `supabase/migrations/202610250003_lms_directory_read.sql` allows authenticated students and teachers to browse the teacher directory.
+
+The initial teachers are **Dr. Randhir Singh** (`rsingh@gndec.ac.in`, Applied Science, physics) and **test** (`luckys0146@gmail.com`). The seed generator remains in `scripts/generate_lms_seed.mjs` so the roster can be regenerated if the JSON list changes.
+
+## Routes
+
+| Route | Behavior |
+|---|---|
+| `/learn` | Student dashboard with profile details, progress summary, recent lessons, and courses. |
+| `/learn/login` | Email eligibility check, OTP request, and OTP verification. |
+| `/learn/teachers` | Browse all approved teachers. |
+| `/learn/teachers/:id` | Browse published lessons from one teacher. |
+| `/learn/courses` | Browse published courses. |
+| `/learn/watch/:id` | Unlisted YouTube player with title, teacher, course, like/dislike counts, and completion tracking. |
+| `/learn/admin` | Teacher-only publishing studio. Teachers can paste a YouTube URL, fetch its title, choose an existing course, or create a new course. |
+
+## Validation
+
+`pnpm build` passes with the LMS changes. The repository’s test command still reports five failures in pre-existing timetable, announcement, and student-profile tests; none of the failures are in the LMS files. The TypeScript check also reports existing baseline issues in those same areas and the existing Drizzle/domhandler setup.
+
+Before production launch, verify OTP delivery with a real approved account, confirm the Resend sending domain, and rotate any credentials that were shared outside the deployment secret manager.

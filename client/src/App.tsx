@@ -14,6 +14,7 @@ import DownloadPage from "./pages/DownloadPage";
 import VacantRoomsPage from "./pages/VacantRoomsPage";
 import CampusPage from "./pages/CampusPage";
 import MarkAttendancePage from "./pages/MarkAttendancePage";
+import Learn from "./pages/Learn";
 
 function Router() {
   return (
@@ -28,6 +29,13 @@ function Router() {
       <Route path="/syllabus" component={SyllabusPage} />
       <Route path="/papers" component={PreviousPapersPage} />
       <Route path="/download" component={DownloadPage} />
+      <Route path="/learn" component={Learn} />
+      <Route path="/learn/login" component={Learn} />
+      <Route path="/learn/teachers" component={Learn} />
+      <Route path="/learn/teachers/:id" component={Learn} />
+      <Route path="/learn/courses" component={Learn} />
+      <Route path="/learn/watch/:id" component={Learn} />
+      <Route path="/learn/admin" component={Learn} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

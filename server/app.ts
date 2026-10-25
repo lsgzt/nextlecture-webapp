@@ -124,6 +124,31 @@ export function createApp() {
       else res.end();
     }
   });
+  app.post("/api/lms/youtube-metadata", async (req, res) => {
+    try {
+      const rawUrl = typeof req.body?.url === "string" ? req.body.url.trim() : "";
+      const parsed = new URL(rawUrl);
+      const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+      const isYouTube = host === "youtube.com" || host === "youtu.be" || host === "m.youtube.com";
+      if (!isYouTube) {
+        res.status(400).json({ message: "Please use a valid YouTube URL." });
+        return;
+      }
+      const response = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(rawUrl)}&format=json`);
+      if (!response.ok) {
+        res.status(400).json({ message: "YouTube could not find that video." });
+        return;
+      }
+      const metadata = await response.json() as { title?: string; author_name?: string };
+      if (!metadata.title) {
+        res.status(400).json({ message: "That YouTube video does not have a readable title." });
+        return;
+      }
+      res.json({ title: metadata.title, author: metadata.author_name ?? null });
+    } catch {
+      res.status(400).json({ message: "Please enter a valid YouTube video URL." });
+    }
+  });
   app.use(
     "/api/trpc",
     createExpressMiddleware({
