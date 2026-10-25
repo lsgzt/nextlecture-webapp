@@ -133,11 +133,11 @@ export async function sendMagicLink(email: string) {
 /**
  * TEMPORARY DEV SWITCH — set to false once a real email provider is wired
  * up. While true the login form skips the magic-link email entirely: the
- * address is only checked against the student/teacher roster and, on a
- * match, the caller is signed straight in with a fixed dev password.
- * Supabase auth users are auto-provisioned with that password on first use,
- * so "Confirm email" must be OFF in Supabase (Authentication → Sign In /
- * Up → Email) for brand-new addresses.
+ * address is checked against the student/teacher roster and, on a match,
+ * the caller is signed straight in with a shared dev password. The account
+ * is provisioned/confirmed SERVER-SIDE (POST /api/lms/dev-login, which needs
+ * LMS_SUPABASE_SERVICE_KEY in the server environment) so Supabase never
+ * sends a verification email for these sign-ins.
  */
 export const LMS_DEV_LOGIN = true;
 
@@ -149,22 +149,29 @@ export async function devSignIn(email: string) {
   const clean = email.trim().toLowerCase();
 
   // 1) The account may already carry the dev password — the happy path.
-  const { data: signIn, error: signInError } = await client.auth.signInWithPassword({ email: clean, password: LMS_DEV_PASSWORD });
-  if (!signInError && signIn.session) return;
+  const { data: signIn } = await client.auth.signInWithPassword({ email: clean, password: LMS_DEV_PASSWORD });
+  if (signIn?.session) return;
 
-  // 2) First time seeing this address — provision it, then use the session
-  //    Supabase hands back when "Confirm email" is disabled.
-  const { data: signUp, error: signUpError } = await client.auth.signUp({ email: clean, password: LMS_DEV_PASSWORD });
-  if (!signUpError && signUp.session) return;
-  if (signUpError && !/already (been )?registered/i.test(signUpError.message ?? "")) throw signUpError;
+  // 2) Ask the backend to provision/confirm the account with the dev
+  //    password (email_confirm: true) — no email is ever sent.
+  const response = await fetch("/api/lms/dev-login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: clean }),
+  });
+  if (!response.ok) {
+    const data = (await response.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(data?.message ?? "Could not prepare your sign-in. Try again shortly.");
+  }
 
-  // 3) Provisioned but no session yet — retry the password once (covers
-  //    signUp responses that omit the session), otherwise surface why.
-  const retry = await client.auth.signInWithPassword({ email: clean, password: LMS_DEV_PASSWORD }).catch(() => null);
-  if (retry?.data.session) return;
-  throw new Error(
-    "Dev sign-in is blocked by Supabase: disable “Confirm email” under Authentication → Sign In / Up → Email while testing, or this address signed in previously via a magic link and needs its dev password reset.",
-  );
+  // 3) Sign in with the password the backend just set.
+  const { data: retry, error: retryError } = await client.auth.signInWithPassword({
+    email: clean,
+    password: LMS_DEV_PASSWORD,
+  });
+  if (retryError || !retry?.session) {
+    throw new Error(retryError?.message ?? "Could not sign you in right now.");
+  }
 }
 
 export async function getSession() {
@@ -242,6 +249,34 @@ export async function getVideo(id: string) {
   if (!data) return null;
   const video: any = data;
   return { ...video, course: video.lms_courses, teacher: video.lms_teachers } as Video;
+}
+
+/* ------------------------------------------------------------------ */
+/* Teacher studio — publishing & deleting                              */
+/* ------------------------------------------------------------------ */
+
+export async function deleteVideo(videoId: string) {
+  if (lmsDemo) {
+    for (const course of demoCourses) {
+      const videos = course.videos ?? [];
+      const index = videos.findIndex((video) => video.id === videoId);
+      if (index >= 0) videos.splice(index, 1);
+    }
+    return;
+  }
+  const { error } = await requireLmsClient().from("lms_videos").delete().eq("id", videoId);
+  if (error) throw error;
+}
+
+export async function deleteCourse(courseId: string) {
+  if (lmsDemo) {
+    const index = demoCourses.findIndex((course) => course.id === courseId);
+    if (index >= 0) demoCourses.splice(index, 1);
+    return;
+  }
+  // lms_videos (and its progress/reactions) cascade from the course delete.
+  const { error } = await requireLmsClient().from("lms_courses").delete().eq("id", courseId);
+  if (error) throw error;
 }
 
 /* ------------------------------------------------------------------ */

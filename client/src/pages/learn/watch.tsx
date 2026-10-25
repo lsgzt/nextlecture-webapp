@@ -4,6 +4,7 @@ import { Check, Link2, ThumbsDown, ThumbsUp } from "lucide-react";
 import { toast } from "sonner";
 import {
   demoStudent,
+  getCurrentRole,
   getProgress,
   getReactionCounts,
   getSession,
@@ -56,6 +57,7 @@ export function Watch({ id }: { id: string }) {
   const [email, setEmail] = useState("");
   const [upNext, setUpNext] = useState<Video[]>([]);
   const [marking, setMarking] = useState(false);
+  const [isStudent, setIsStudent] = useState(lmsDemo);
 
   useEffect(() => {
     let active = true;
@@ -74,6 +76,9 @@ export function Watch({ id }: { id: string }) {
       setEmail(account);
       setCounts(await getReactionCounts(id));
       if (account) {
+        // Reactions and progress are student features — the schema keys them
+        // to lms_students, so teachers get a read-only view of the counts.
+        setIsStudent(lmsDemo ? true : (await getCurrentRole(account).catch(() => null)) === "student");
         const progress = await getProgress(account, id).catch(() => []);
         setComplete(Boolean(progress[0]?.completed));
       }
@@ -209,55 +214,74 @@ export function Watch({ id }: { id: string }) {
 
           <Reveal delay={0.15} className="mt-6">
             <div className="flex flex-wrap items-center gap-3">
-              <div className="inline-flex items-center rounded-full border border-[var(--l-line)] bg-[var(--l-surface)] p-1 shadow-sm">
-                <button
-                  type="button"
-                  onClick={() => react("like")}
-                  aria-pressed={reaction === "like"}
-                  className={cn(
-                    "flex h-9 items-center gap-2 rounded-full px-4 text-[0.8rem] font-semibold transition-colors duration-200",
-                    reaction === "like"
-                      ? "bg-[var(--l-tint)] text-[var(--l-green)]"
-                      : "text-[var(--l-ink-2)] hover:bg-[var(--l-tint-2)] hover:text-[var(--l-ink)]",
-                  )}
+              {isStudent ? (
+                <div className="inline-flex items-center rounded-full border border-[var(--l-line)] bg-[var(--l-surface)] p-1 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => react("like")}
+                    aria-pressed={reaction === "like"}
+                    className={cn(
+                      "flex h-9 items-center gap-2 rounded-full px-4 text-[0.8rem] font-semibold transition-colors duration-200",
+                      reaction === "like"
+                        ? "bg-[var(--l-tint)] text-[var(--l-green)]"
+                        : "text-[var(--l-ink-2)] hover:bg-[var(--l-tint-2)] hover:text-[var(--l-ink)]",
+                    )}
+                  >
+                    <ThumbsUp size={14} strokeWidth={1.9} fill={reaction === "like" ? "currentColor" : "none"} />
+                    <span className="font-mono text-[0.72rem] tabular-nums">{counts.likes}</span>
+                  </button>
+                  <div className="h-5 w-px bg-[var(--l-line)]" />
+                  <button
+                    type="button"
+                    onClick={() => react("dislike")}
+                    aria-pressed={reaction === "dislike"}
+                    className={cn(
+                      "flex h-9 items-center gap-2 rounded-full px-4 text-[0.8rem] font-semibold transition-colors duration-200",
+                      reaction === "dislike"
+                        ? "bg-[var(--l-amber-tint)] text-[var(--l-amber)]"
+                        : "text-[var(--l-ink-2)] hover:bg-[var(--l-tint-2)] hover:text-[var(--l-ink)]",
+                    )}
+                  >
+                    <ThumbsDown size={14} strokeWidth={1.9} fill={reaction === "dislike" ? "currentColor" : "none"} />
+                    <span className="font-mono text-[0.72rem] tabular-nums">{counts.dislikes}</span>
+                  </button>
+                </div>
+              ) : (
+                <div
+                  title="Class reactions"
+                  className="inline-flex h-11 items-center gap-4 rounded-full border border-[var(--l-line)] bg-[var(--l-surface)] px-5 text-[0.8rem] font-semibold text-[var(--l-ink-2)]"
                 >
-                  <ThumbsUp size={14} strokeWidth={1.9} fill={reaction === "like" ? "currentColor" : "none"} />
-                  <span className="font-mono text-[0.72rem] tabular-nums">{counts.likes}</span>
-                </button>
-                <div className="h-5 w-px bg-[var(--l-line)]" />
-                <button
-                  type="button"
-                  onClick={() => react("dislike")}
-                  aria-pressed={reaction === "dislike"}
-                  className={cn(
-                    "flex h-9 items-center gap-2 rounded-full px-4 text-[0.8rem] font-semibold transition-colors duration-200",
-                    reaction === "dislike"
-                      ? "bg-[var(--l-amber-tint)] text-[var(--l-amber)]"
-                      : "text-[var(--l-ink-2)] hover:bg-[var(--l-tint-2)] hover:text-[var(--l-ink)]",
-                  )}
-                >
-                  <ThumbsDown size={14} strokeWidth={1.9} fill={reaction === "dislike" ? "currentColor" : "none"} />
-                  <span className="font-mono text-[0.72rem] tabular-nums">{counts.dislikes}</span>
-                </button>
-              </div>
+                  <span className="flex items-center gap-2">
+                    <ThumbsUp size={14} strokeWidth={1.9} />
+                    <span className="font-mono text-[0.72rem] tabular-nums">{counts.likes}</span>
+                  </span>
+                  <span className="h-5 w-px bg-[var(--l-line)]" />
+                  <span className="flex items-center gap-2">
+                    <ThumbsDown size={14} strokeWidth={1.9} />
+                    <span className="font-mono text-[0.72rem] tabular-nums">{counts.dislikes}</span>
+                  </span>
+                </div>
+              )}
 
-              <button
-                type="button"
-                onClick={markComplete}
-                disabled={complete || marking || !email}
-                className={cn("learn-btn h-11", complete ? "learn-btn-ghost text-[var(--l-green)]" : "learn-btn-primary")}
-              >
-                {complete ? (
-                  <>
-                    <Check size={15} />
-                    Completed
-                  </>
-                ) : marking ? (
-                  "Saving…"
-                ) : (
-                  "Mark complete"
-                )}
-              </button>
+              {isStudent && (
+                <button
+                  type="button"
+                  onClick={markComplete}
+                  disabled={complete || marking || !email}
+                  className={cn("learn-btn h-11", complete ? "learn-btn-ghost text-[var(--l-green)]" : "learn-btn-primary")}
+                >
+                  {complete ? (
+                    <>
+                      <Check size={15} />
+                      Completed
+                    </>
+                  ) : marking ? (
+                    "Saving…"
+                  ) : (
+                    "Mark complete"
+                  )}
+                </button>
+              )}
 
               <button type="button" onClick={copyLink} title="Copy link" aria-label="Copy link" className="learn-btn learn-btn-quiet h-11 w-11 !px-0">
                 <Link2 size={15} strokeWidth={1.8} />
@@ -269,7 +293,9 @@ export function Watch({ id }: { id: string }) {
             <div className="mt-8 rounded-[1.1rem] border border-dashed border-[var(--l-line)] bg-[var(--l-surface)]/70 p-5">
               <p className="font-mono text-[0.62rem] font-medium tracking-[0.18em] text-[var(--l-ink-3)] uppercase">About this lesson</p>
               <p className="mt-2.5 max-w-xl text-[0.85rem] leading-relaxed text-[var(--l-ink-2)]">
-                Watch at your own pace — your progress saves automatically. Completing lessons keeps your desk tidy, and reactions tell teachers which explanations actually land.
+                {isStudent
+                  ? "Watch at your own pace — your progress saves automatically. Completing lessons keeps your desk tidy, and reactions tell teachers which explanations actually land."
+                  : "Reactions and completion are student-side — here you can see how the class is responding to this lesson at a glance."}
               </p>
             </div>
           </Reveal>

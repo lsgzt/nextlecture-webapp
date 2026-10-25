@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { ArrowUpRight, Sparkles } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
+  deleteCourse,
+  deleteVideo,
   demoTeacher,
   getSession,
   getTeacher,
@@ -13,6 +15,7 @@ import {
   type Teacher,
   type Video,
 } from "@/lib/lms";
+import { cn } from "@/lib/utils";
 import { EmptyState, Monogram, Reveal } from "./parts";
 import { LearnShell } from "./shell";
 
@@ -48,6 +51,9 @@ export function Admin() {
   const [newCourseTitle, setNewCourseTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [fetchingTitle, setFetchingTitle] = useState(false);
+  const [openCourse, setOpenCourse] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ type: "course" | "video"; id: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -192,6 +198,42 @@ export function Admin() {
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
   const firstName = (teacher?.name ?? "").replace(/^(Dr\.|Prof\.)\s+/, "").split(" ")[0] || "there";
 
+  async function refreshLibrary() {
+    if (!teacher) return;
+    const all = await listCourses();
+    setCourses(all.filter((course) => course.teacher_id === teacher.id));
+  }
+
+  async function removeCourse(courseId: string) {
+    if (!teacher || deleting) return;
+    setDeleting(true);
+    try {
+      await deleteCourse(courseId);
+      await refreshLibrary();
+      toast.success("Course deleted");
+    } catch (error: any) {
+      toast.error(error.message ?? "Could not delete the course");
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(null);
+    }
+  }
+
+  async function removeVideo(videoId: string) {
+    if (!teacher || deleting) return;
+    setDeleting(true);
+    try {
+      await deleteVideo(videoId);
+      await refreshLibrary();
+      toast.success("Lesson deleted");
+    } catch (error: any) {
+      toast.error(error.message ?? "Could not delete the lesson");
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(null);
+    }
+  }
+
   return (
     <LearnShell
       role="teacher"
@@ -251,37 +293,148 @@ export function Admin() {
                 </div>
               </Reveal>
               <div className="space-y-4">
-                {courses.map((course, index) => (
+                {courses.map((course, index) => {
+                  const lessonCount = course.videos?.length ?? 0;
+                  const open = openCourse === course.id;
+                  const confirmingCourse = confirmDelete?.type === "course" && confirmDelete.id === course.id;
+                  return (
                   <Reveal key={course.id} delay={0.05 * index}>
-                    <article className="learn-card learn-card-interactive flex items-start justify-between gap-4 p-5">
-                      <div className="min-w-0">
-                        <p className="font-mono text-[0.62rem] tracking-[0.14em] text-[var(--l-ink-3)] uppercase">
-                          {String(index + 1).padStart(2, "0")} · course
-                        </p>
-                        <h3 className="mt-1.5 font-display text-[1.15rem] font-semibold leading-snug text-[var(--l-ink)]">
-                          {course.title}
-                        </h3>
-                        <p className="mt-1 text-[0.8rem] text-[var(--l-ink-3)]">
-                          {course.videos?.length ?? 0} published lessons
-                        </p>
-                        {course.videos && course.videos.length > 0 && (
-                          <p className="mt-2.5 line-clamp-1 text-[0.78rem] text-[var(--l-ink-2)]">
-                            <span className="text-[var(--l-ink-3)]">Latest · </span>
-                            {course.videos[course.videos.length - 1].title}
+                    <article className="learn-card p-5">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <p className="font-mono text-[0.62rem] tracking-[0.14em] text-[var(--l-ink-3)] uppercase">
+                            {String(index + 1).padStart(2, "0")} · course
                           </p>
-                        )}
+                          <h3 className="mt-1.5 font-display text-[1.15rem] font-semibold leading-snug text-[var(--l-ink)]">
+                            {course.title}
+                          </h3>
+                          <p className="mt-1 text-[0.8rem] text-[var(--l-ink-3)]">
+                            {lessonCount} published {lessonCount === 1 ? "lesson" : "lessons"}
+                          </p>
+                          {course.videos && lessonCount > 0 && (
+                            <p className="mt-2.5 line-clamp-1 text-[0.78rem] text-[var(--l-ink-2)]">
+                              <span className="text-[var(--l-ink-3)]">Latest · </span>
+                              {course.videos[course.videos.length - 1].title}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <Link
+                            href={`/learn/courses?course=${course.id}`}
+                            title="Open in catalogue"
+                            aria-label={`Open ${course.title} in the catalogue`}
+                            className="grid h-9 w-9 place-items-center rounded-full border border-[var(--l-line)] bg-[var(--l-surface)] text-[var(--l-ink-2)] transition-colors hover:border-[var(--l-green)] hover:text-[var(--l-green)]"
+                          >
+                            <ArrowUpRight size={15} />
+                          </Link>
+                          {!confirmingCourse && (
+                            <button
+                              type="button"
+                              title="Delete course"
+                              aria-label={`Delete ${course.title}`}
+                              onClick={() => {
+                                setConfirmDelete({ type: "course", id: course.id });
+                                setOpenCourse(course.id);
+                              }}
+                              className="grid h-9 w-9 place-items-center rounded-full border border-[var(--l-line)] bg-[var(--l-surface)] text-[var(--l-ink-2)] transition-colors hover:border-[var(--l-amber)] hover:bg-[var(--l-amber-tint)] hover:text-[var(--l-amber)]"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <Link
-                        href={`/learn/courses?course=${course.id}`}
-                        title="Open in catalogue"
-                        aria-label={`Open ${course.title} in the catalogue`}
-                        className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[var(--l-line)] bg-[var(--l-surface)] text-[var(--l-ink-2)] transition-colors hover:border-[var(--l-green)] hover:text-[var(--l-green)]"
+
+                      {confirmingCourse && (
+                        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--l-amber)]/40 bg-[var(--l-amber-tint)] px-4 py-3">
+                          <p className="min-w-0 text-[0.8rem] font-medium leading-snug text-[#7A4A16]">
+                            Delete “{course.title}” and its {lessonCount} {lessonCount === 1 ? "lesson" : "lessons"}? Students lose access immediately — this can’t be undone.
+                          </p>
+                          <span className="flex shrink-0 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => removeCourse(course.id)}
+                              disabled={deleting}
+                              className="h-9 rounded-full bg-[var(--l-amber)] px-4 text-[0.75rem] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                            >
+                              {deleting ? "Deleting…" : "Yes, delete"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDelete(null)}
+                              className="learn-btn learn-btn-ghost h-9 px-4 text-[0.75rem]"
+                            >
+                              Keep it
+                            </button>
+                          </span>
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => setOpenCourse(open ? null : course.id)}
+                        aria-expanded={open}
+                        className="learn-handlink mt-3.5 flex items-center gap-1.5 text-[0.74rem] font-medium"
                       >
-                        <ArrowUpRight size={15} />
-                      </Link>
+                        {open ? "Hide lessons" : "Manage lessons"}
+                        <ChevronDown size={13} className={cn("transition-transform duration-200", open && "rotate-180")} />
+                      </button>
+                      {open && (
+                        <ul className="mt-3 border-t border-[var(--l-line)] pt-1">
+                          {course.videos?.map((video) => {
+                            const confirmingVideo = confirmDelete?.type === "video" && confirmDelete.id === video.id;
+                            return (
+                              <li key={video.id} className="flex items-center justify-between gap-3 border-b border-dashed border-[var(--l-line)] py-2.5 last:border-b-0">
+                                <Link href={`/learn/watch/${video.id}`} className="group flex min-w-0 items-baseline gap-2.5">
+                                  <span className="font-mono text-[0.62rem] text-[var(--l-ink-3)]">
+                                    {String(video.position ?? 1).padStart(2, "0")}
+                                  </span>
+                                  <span className="truncate text-[0.82rem] font-medium text-[var(--l-ink)] transition-colors group-hover:text-[var(--l-green)]">
+                                    {video.title}
+                                  </span>
+                                </Link>
+                                {confirmingVideo ? (
+                                  <span className="flex shrink-0 items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => removeVideo(video.id)}
+                                      disabled={deleting}
+                                      className="h-7 rounded-full bg-[var(--l-amber)] px-3 text-[0.68rem] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                                    >
+                                      {deleting ? "…" : "Delete"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setConfirmDelete(null)}
+                                      className="h-7 rounded-full border border-[var(--l-line)] px-3 text-[0.68rem] font-medium text-[var(--l-ink-2)]"
+                                    >
+                                      Keep
+                                    </button>
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    title="Delete lesson"
+                                    aria-label={`Delete ${video.title}`}
+                                    onClick={() => setConfirmDelete({ type: "video", id: video.id })}
+                                    className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[var(--l-ink-3)] transition-colors hover:bg-[var(--l-amber-tint)] hover:text-[var(--l-amber)]"
+                                  >
+                                    <Trash2 size={13.5} />
+                                  </button>
+                                )}
+                              </li>
+                            );
+                          })}
+                          {lessonCount === 0 && (
+                            <li className="py-3 text-[0.78rem] leading-relaxed text-[var(--l-ink-3)]">
+                              No lessons in this course yet — publish the first one from the form on the right.
+                            </li>
+                          )}
+                        </ul>
+                      )}
                     </article>
                   </Reveal>
-                ))}
+                  );
+                })}
                 {courses.length === 0 && (
                   <EmptyState
                     icon={Sparkles}

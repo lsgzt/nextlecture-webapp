@@ -1,5 +1,6 @@
 import express from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
+import { createClient } from "@supabase/supabase-js";
 import { appRouter } from "./routers";
 import { createContext } from "./_core/context";
 import { registerOAuthRoutes } from "./_core/oauth";
@@ -147,6 +148,93 @@ export function createApp() {
       res.json({ title: metadata.title, author: metadata.author_name ?? null });
     } catch {
       res.status(400).json({ message: "Please enter a valid YouTube video URL." });
+    }
+  });
+  app.post("/api/lms/dev-login", async (req, res) => {
+    try {
+      const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+      if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        res.status(400).json({ message: "Please provide a valid email address." });
+        return;
+      }
+
+      // Server-only credentials: the service-role key must never reach the browser.
+      const serviceKey = process.env.LMS_SUPABASE_SERVICE_KEY;
+      const supabaseUrl = process.env.LMS_SUPABASE_URL || process.env.VITE_LMS_SUPABASE_URL;
+      if (!serviceKey || !supabaseUrl) {
+        res.status(503).json({
+          message: "Dev sign-in is not configured on the server. Add LMS_SUPABASE_SERVICE_KEY to the environment.",
+        });
+        return;
+      }
+
+      const admin = createClient(supabaseUrl, serviceKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+
+      // Only roster emails may be provisioned — same gate the client applies.
+      const [students, teachers] = await Promise.all([
+        admin.from("lms_students").select("email").eq("email", email).maybeSingle(),
+        admin.from("lms_teachers").select("email").eq("email", email).maybeSingle(),
+      ]);
+      const role = students.data ? "student" : teachers.data ? "teacher" : null;
+      if (!role) {
+        res.status(403).json({ message: "Only first-year students and approved teachers can access this portal." });
+        return;
+      }
+
+      // Shared password for the temporary no-email dev login. See client/src/lib/lms.ts.
+      const devPassword = "nextlecture-dev-2026";
+
+      // email_confirm: true means Supabase never sends a verification email.
+      const created = await admin.auth.admin.createUser({
+        email,
+        password: devPassword,
+        email_confirm: true,
+      });
+      if (created.error) {
+        const message = created.error.message ?? "";
+        if (!/already (been )?registered|already exists/i.test(message)) {
+          console.error("[LMS dev-login] createUser failed:", message);
+          res.status(502).json({ message: "Supabase could not prepare your account. Try again shortly." });
+          return;
+        }
+
+        // The account already exists (e.g. from the old magic-link flow) —
+        // locate it and set the dev password + confirmed flag instead.
+        let page = 1;
+        let userId: string | null = null;
+        while (userId === null) {
+          const list = await admin.auth.admin.listUsers({ page, perPage: 1000 });
+          if (list.error) {
+            console.error("[LMS dev-login] listUsers failed:", list.error.message);
+            break;
+          }
+          const match = list.data?.users?.find((user) => (user.email ?? "").toLowerCase() === email);
+          if (match) {
+            userId = match.id;
+            break;
+          }
+          const nextPage = list.data?.nextPage ?? null;
+          if (nextPage === null) break;
+          page = nextPage;
+        }
+        if (userId === null) {
+          res.status(502).json({ message: "Could not find your account in Supabase. Try again shortly." });
+          return;
+        }
+        const updated = await admin.auth.admin.updateUserById(userId, { password: devPassword, email_confirm: true });
+        if (updated.error) {
+          console.error("[LMS dev-login] updateUserById failed:", updated.error.message);
+          res.status(502).json({ message: "Supabase could not update your account. Try again shortly." });
+          return;
+        }
+      }
+
+      res.json({ ok: true, role });
+    } catch (error) {
+      console.error("[LMS dev-login] failed:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Dev sign-in failed. Try again shortly." });
     }
   });
   app.use(
