@@ -1150,5 +1150,6 @@ on conflict (email) do update set name = excluded.name, crn = excluded.crn, bran
 
 insert into public.lms_teachers (name, email, department, subject) values
 ('Dr. Randhir Singh', 'rsingh@gndec.ac.in', 'Applied Science', 'physics'),
-('test', 'luckys0146@gmail.com', null, null)
+('test', 'luckys0146@gmail.com', null, null),
+('Neeraj Kumar', 'neerajkumar735561@gmail.com', 'Applied Science', 'Mathematics')
 on conflict (email) do update set name = excluded.name, department = excluded.department, subject = excluded.subject;

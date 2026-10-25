@@ -4,6 +4,7 @@ const students = JSON.parse(fs.readFileSync('/home/ubuntu/upload/first_year_stud
 const teachers = [
   { name: 'Dr. Randhir Singh', email: 'rsingh@gndec.ac.in', department: 'Applied Science', subject: 'physics' },
   { name: 'test', email: 'luckys0146@gmail.com', department: null, subject: null },
+  { name: 'Neeraj Kumar', email: 'neerajkumar735561@gmail.com', department: 'Applied Science', subject: 'Mathematics' },
 ];
 
 const sqlString = (value) => value === null || value === undefined ? 'null' : `'${String(value).replaceAll("'", "''")}'`;

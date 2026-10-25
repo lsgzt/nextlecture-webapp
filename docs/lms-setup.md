@@ -28,11 +28,11 @@ Also add the following under **Authentication → URL Configuration**. Set the p
 The following files are applied to the `lms` project:
 
 - `supabase/migrations/202610250001_lms_core.sql` creates the LMS tables, RLS policies, reaction-count function, indexes, and Realtime publication entry.
-- `supabase/seed_lms.sql` upserts the supplied first-year roster and the two initial teachers.
+- `supabase/seed_lms.sql` upserts the supplied first-year roster and the initial teachers.
 - `supabase/migrations/202610250002_lms_login_lookup.sql` creates the anonymous pre-OTP eligibility lookup.
 - `supabase/migrations/202610250003_lms_directory_read.sql` allows authenticated students and teachers to browse the teacher directory.
 
-The initial teachers are **Dr. Randhir Singh** (`rsingh@gndec.ac.in`, Applied Science, physics) and **test** (`luckys0146@gmail.com`). The seed generator remains in `scripts/generate_lms_seed.mjs` so the roster can be regenerated if the JSON list changes.
+The initial teachers are **Dr. Randhir Singh** (`rsingh@gndec.ac.in`, Applied Science, physics), **test** (`luckys0146@gmail.com`), and **Neeraj Kumar** (`neerajkumar735561@gmail.com`, Applied Science, Mathematics). The seed generator remains in `scripts/generate_lms_seed.mjs` so the roster can be regenerated if the JSON list changes.
 
 ## Routes
 
