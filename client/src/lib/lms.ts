@@ -26,7 +26,11 @@ export async function lookupLogin(email: string) {
 }
 
 export async function sendOtp(email: string) {
-  const { error } = await requireLmsClient().auth.signInWithOtp({ email: email.trim().toLowerCase(), options: { shouldCreateUser: true } });
+  const redirectTo = typeof window !== "undefined" ? `${window.location.origin}/learn/login` : undefined;
+  const { error } = await requireLmsClient().auth.signInWithOtp({
+    email: email.trim().toLowerCase(),
+    options: { shouldCreateUser: true, emailRedirectTo: redirectTo },
+  });
   if (error) throw error;
 }
 
