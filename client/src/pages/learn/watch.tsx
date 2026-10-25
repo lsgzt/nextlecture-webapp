@@ -178,14 +178,30 @@ export function Watch({ id }: { id: string }) {
 
       <Reveal delay={0.05} className="mt-5">
         <div className="overflow-hidden rounded-[1.3rem] bg-black shadow-[0_28px_60px_-28px_rgba(9,38,31,0.55)] ring-1 ring-black/10">
-          <div className="aspect-video">
+          {/*
+            Click shields: YouTube embeds always expose a logo / title that navigate
+            off-site. We keep the player usable (play, scrub, fullscreen) but cover
+            the chrome that leaves NextLecture. Context menu is also blocked on the
+            frame so "Open on YouTube" is harder to hit by accident.
+          */}
+          <div
+            className="relative aspect-video select-none"
+            onContextMenu={(event) => event.preventDefault()}
+          >
             <iframe
-              className="h-full w-full"
-              src={`https://www.youtube-nocookie.com/embed/${video.youtube_id}?rel=0&modestbranding=1`}
+              className="absolute inset-0 h-full w-full"
+              src={`https://www.youtube-nocookie.com/embed/${video.youtube_id}?rel=0&modestbranding=1&iv_load_policy=3&playsinline=1&fs=1&disablekb=0&color=white`}
               title={video.title}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
+              referrerPolicy="strict-origin-when-cross-origin"
             />
+            {/* Top title / channel link (shows on hover / pause) */}
+            <div className="absolute inset-x-0 top-0 z-[2] h-14" aria-hidden />
+            {/* Bottom-right YouTube logo + "Watch on YouTube" */}
+            <div className="absolute bottom-0 right-0 z-[2] h-12 w-[7.5rem]" aria-hidden />
+            {/* Bottom-left channel avatar / name strip on some layouts */}
+            <div className="absolute bottom-10 left-0 z-[2] h-10 w-40" aria-hidden />
           </div>
         </div>
       </Reveal>
