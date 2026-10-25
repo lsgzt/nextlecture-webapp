@@ -25,19 +25,13 @@ export async function lookupLogin(email: string) {
   return (data?.[0] ?? null) as LoginLookup | null;
 }
 
-export async function sendOtp(email: string) {
+export async function sendMagicLink(email: string) {
   const redirectTo = typeof window !== "undefined" ? `${window.location.origin}/learn/login` : undefined;
   const { error } = await requireLmsClient().auth.signInWithOtp({
     email: email.trim().toLowerCase(),
     options: { shouldCreateUser: true, emailRedirectTo: redirectTo },
   });
   if (error) throw error;
-}
-
-export async function verifyOtp(email: string, token: string) {
-  const { data, error } = await requireLmsClient().auth.verifyOtp({ email: email.trim().toLowerCase(), token, type: "email" });
-  if (error) throw error;
-  return data.session;
 }
 
 export async function getSession() {
