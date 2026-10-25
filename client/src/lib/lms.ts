@@ -46,8 +46,10 @@ export function subscribeToAuth(callback: (session: Session | null) => void) {
 }
 
 export async function getCurrentRole(email: string) {
-  const lookup = await lookupLogin(email);
-  return lookup?.role ?? null;
+  const [student, teacher] = await Promise.all([getStudent(email), getTeacher(email)]);
+  if (student) return "student" as const;
+  if (teacher) return "teacher" as const;
+  return null;
 }
 
 export async function getStudent(email: string) {
