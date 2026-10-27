@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowLeft, CalendarDays, CheckCircle2, ClipboardCheck, Info, LoaderCircle, MapPin, Target, UserRound } from "lucide-react";
+import { AlertCircle, CalendarDays, CheckCircle2, ClipboardCheck, Info, LoaderCircle, MapPin, Target, UserRound } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import type { AttendanceHistory, AttendanceLeaderboard as AttendanceLeaderboardData, AttendanceLeaderboardScope, AttendanceRecord, AttendanceRecordInput, AttendanceStatus } from "@shared/attendance";
@@ -6,9 +6,11 @@ import { BRAND_LOGO_URL } from "@shared/config";
 import type { StudentProfile } from "@shared/student-profile";
 import type { TimetableResponse, Weekday } from "@shared/timetable";
 import { AttendanceLeaderboard } from "@/components/AttendanceLeaderboard";
+import { AppBottomNav } from "@/components/AppBottomNav";
 import { SubjectWiseAttendance } from "@/components/SubjectWiseAttendance";
 import { AttendanceControls } from "@/components/AttendanceControls";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { UniversalSearch } from "@/components/UniversalSearch";
 import { Calendar } from "@/components/ui/calendar";
 import { Slider } from "@/components/ui/slider";
 import { AttendanceApiError, DEFAULT_LEADERBOARD_SCOPE, calculateAttendanceSummary, createAttendanceClient, formatLocalAttendanceDate, getAttendanceProfileScope, readAttendanceTarget, saveAttendanceTarget, shouldApplyLeaderboardResponse } from "@/lib/attendance";
@@ -239,8 +241,8 @@ export default function AttendancePage() {
   }
 
   return <div className="min-h-screen bg-[#f7f8f6] text-foreground dark:bg-[#101917]">
-    <header className="app-topbar"><div className="container flex h-17 items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><Link href="/app" className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-border bg-card text-muted-foreground transition hover:text-teal-700 dark:hover:text-teal-300" aria-label="Back to timetable"><ArrowLeft className="h-4 w-4" /></Link><img src={BRAND_LOGO_URL} alt="NextLecture timetable logo" width={32} height={32} className="h-8 w-8 shrink-0 rounded-xl object-cover shadow-sm shadow-teal-950/25" /><div className="min-w-0"><p className="truncate font-display text-lg font-semibold tracking-[-0.04em]">Attendance</p><p className="text-[0.65rem] font-semibold tracking-[0.13em] text-teal-700 dark:text-teal-300">PERSONAL MANUAL TRACKER</p></div></div><div className="flex shrink-0 items-center gap-2"><Link href="/papers" className="hidden rounded-lg px-3 py-2 text-sm font-bold text-muted-foreground transition hover:bg-teal-50 hover:text-teal-700 dark:hover:bg-teal-950/40 dark:hover:text-teal-300 sm:inline-flex">Previous papers</Link><ThemeToggle /></div></div></header>
-    <main className="container max-w-7xl py-6 sm:py-9">
+    <header className="app-topbar"><div className="container flex h-16 items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><Link href="/" aria-label="NextLecture home"><img src={BRAND_LOGO_URL} alt="NextLecture timetable logo" width={32} height={32} className="h-8 w-8 shrink-0 rounded-xl object-cover shadow-sm shadow-teal-950/25" /></Link><div className="min-w-0"><p className="truncate font-display text-lg font-semibold tracking-[-0.04em]">Attendance</p><p className="text-[0.65rem] font-semibold tracking-[0.13em] text-teal-700 dark:text-teal-300">PERSONAL MANUAL TRACKER</p></div></div><div className="flex shrink-0 items-center gap-2"><UniversalSearch /><ThemeToggle /></div></div></header>
+    <main className="container max-w-7xl py-6 app-bottom-clearance sm:py-9">
       {!profile ? <section className="mx-auto max-w-xl rounded-3xl border border-border bg-card p-7 text-center shadow-sm"><ClipboardCheck className="mx-auto h-7 w-7 text-teal-700 dark:text-teal-300" /><h1 className="mt-4 font-display text-3xl font-semibold tracking-[-0.05em]">Set your profile first</h1><p className="mt-3 leading-7 text-muted-foreground">Attendance is personal to your saved GNDEC profile and timetable subsection. Set that up before adding any marks.</p><Link href="/app" className="mt-6 inline-flex min-h-11 items-center rounded-xl bg-teal-700 px-4 text-sm font-bold text-white transition hover:bg-teal-800">Open timetable setup</Link></section> : <>
         <section className="nl-enter mb-6 grid gap-5 rounded-[1.6rem] border border-teal-200 bg-gradient-to-br from-teal-50 via-card to-card p-5 shadow-sm dark:border-teal-950/80 dark:from-teal-950/30 sm:p-7 lg:grid-cols-[1fr_auto] lg:items-end"><div><p className="eyebrow"><ClipboardCheck className="h-3.5 w-3.5" /> YOUR PERSONAL RECORD</p><h1 className="mt-3 font-display text-3xl font-semibold tracking-[-0.055em] sm:text-4xl">Attendance, on your terms.</h1><p className="mt-3 max-w-2xl leading-7 text-muted-foreground">This is a private manual tracker, not an official GNDEC attendance record. Marks are synced to your private attendance session and can be corrected anytime.</p></div><div className="rounded-2xl border border-teal-200 bg-white/80 px-4 py-3 text-sm shadow-sm dark:border-teal-900/60 dark:bg-teal-950/35"><p className="font-semibold text-teal-900 dark:text-teal-100">{profile.studentName} · {profileGroup}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Only your saved subsection is used for attendance keys.</p></div></section>
 
@@ -277,5 +279,6 @@ export default function AttendancePage() {
         </section>
       </>}
     </main>
+    <AppBottomNav />
   </div>;
 }

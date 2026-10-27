@@ -12,7 +12,6 @@ import {
 } from "@shared/vacant-rooms";
 import {
   AlertCircle,
-  ArrowLeft,
   ChevronDown,
   ChevronRight,
   CloudOff,
@@ -27,7 +26,9 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
+import { AppBottomNav } from "@/components/AppBottomNav";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { UniversalSearch } from "@/components/UniversalSearch";
 import { trpc } from "@/lib/trpc";
 import { BRAND_LOGO_URL } from "@shared/config";
 
@@ -81,7 +82,7 @@ export default function VacantRoomsPage() {
   const [dayIndex, setDayIndex] = useState(() => defaultDayIndex());
   const [slotIndex, setSlotIndex] = useState(-1);
   const [vacantOnly, setVacantOnly] = useState(false);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => new URLSearchParams(window.location.search).get("room") ?? "");
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
 
@@ -97,6 +98,17 @@ export default function VacantRoomsPage() {
     const tick = window.setInterval(() => setNow(new Date()), 30_000);
     return () => window.clearInterval(tick);
   }, []);
+
+  // Deep link from universal search: /vacant-rooms?room=S204 focuses that room.
+  useEffect(() => {
+    const focusRoom = new URLSearchParams(window.location.search).get("room");
+    if (!focusRoom || !dataQuery.data) return;
+    const room = dataQuery.data.rooms.find(candidate => candidate.key === focusRoom || candidate.name === focusRoom);
+    if (room) {
+      setQuery(room.name);
+      setExpandedKey(room.key);
+    }
+  }, [dataQuery.data]);
 
   const data = dataQuery.data as GlobalRoomData | undefined;
 
@@ -139,22 +151,17 @@ export default function VacantRoomsPage() {
   return (
     <div className="min-h-screen bg-[#f7f8f6] text-foreground dark:bg-[#101917]">
       <header className="app-topbar">
-        <div className="container flex h-17 items-center justify-between">
+        <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link
-              href="/app"
-              className="grid h-9 w-9 place-items-center rounded-xl border border-border bg-card text-muted-foreground transition hover:text-teal-700 dark:hover:text-teal-300"
-              aria-label="Back to timetable"
-            >
-              <ArrowLeft className="h-4 w-4" />
+            <Link href="/" aria-label="NextLecture home">
+              <img
+                src={BRAND_LOGO_URL}
+                alt="NextLecture"
+                width={32}
+                height={32}
+                className="h-8 w-8 shrink-0 rounded-xl object-cover shadow-sm shadow-teal-950/25"
+              />
             </Link>
-            <img
-              src={BRAND_LOGO_URL}
-              alt="NextLecture"
-              width={32}
-              height={32}
-              className="h-8 w-8 shrink-0 rounded-xl object-cover shadow-sm shadow-teal-950/25"
-            />
             <div>
               <p className="font-display text-lg font-semibold tracking-[-0.04em]">Vacant rooms</p>
               <p className="text-[0.65rem] font-semibold tracking-[0.13em] text-teal-700 dark:text-teal-300">
@@ -163,21 +170,22 @@ export default function VacantRoomsPage() {
             </div>
           </div>
           <div className="flex items-center gap-1.5">
+            <UniversalSearch />
             <button
               type="button"
               onClick={() => refreshMutation.mutate()}
               disabled={refreshing}
-              className="grid h-9 w-9 place-items-center rounded-xl border border-border bg-card text-muted-foreground transition hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700 disabled:opacity-60 dark:hover:border-teal-900 dark:hover:bg-teal-950/35 dark:hover:text-teal-300"
+              className="app-header-button"
               aria-label="Refresh"
             >
-              {refreshing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              {refreshing ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
             </button>
             <ThemeToggle />
           </div>
         </div>
       </header>
 
-      <main className="container max-w-3xl space-y-5 pb-16 pt-7 sm:pt-10">
+      <main className="container max-w-3xl space-y-5 pt-7 app-bottom-clearance sm:pt-10">
         <AnimatePresence mode="wait">
           {loading && (
             <motion.div
@@ -206,7 +214,7 @@ export default function VacantRoomsPage() {
               <AlertCircle className="h-6 w-6 text-amber-700 dark:text-amber-300" />
               <h1 className="mt-4 font-display text-2xl font-semibold tracking-[-0.045em]">Couldn&apos;t load room timetables</h1>
               <p className="mt-2 leading-7 text-muted-foreground">
-                {(dataQuery.error as Error | null)?.message ?? "Please check your connection and try again."}
+                {dataQuery.error?.message ?? "Please check your connection and try again."}
               </p>
               <button
                 type="button"
@@ -494,6 +502,7 @@ export default function VacantRoomsPage() {
           )}
         </AnimatePresence>
       </main>
+      <AppBottomNav />
     </div>
   );
 }

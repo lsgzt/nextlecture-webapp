@@ -14,6 +14,7 @@ import DownloadPage from "./pages/DownloadPage";
 import VacantRoomsPage from "./pages/VacantRoomsPage";
 import CampusPage from "./pages/CampusPage";
 import MarkAttendancePage from "./pages/MarkAttendancePage";
+import FacultyMembersPage from "./pages/FacultyMembersPage";
 import Learn from "./pages/Learn";
 
 function Router() {
@@ -21,6 +22,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/app" component={TimetableApp} />
+      <Route path="/faculty" component={FacultyMembersPage} />
       <Route path="/vacant-rooms" component={VacantRoomsPage} />
       <Route path="/campus" component={CampusPage} />
       <Route path="/attendance" component={AttendancePage} />

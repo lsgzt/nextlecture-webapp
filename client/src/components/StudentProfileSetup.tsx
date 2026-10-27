@@ -77,7 +77,7 @@ export function StudentProfileSetup({ branch, onSaved, onDismiss }: { branch: st
             {matchesQuery.isLoading && <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground"><LoaderCircle className="h-4 w-4 animate-spin text-teal-700" />Searching the official {branch} document…</div>}
             {matchesQuery.data && <div className="mt-4 rounded-xl border border-border p-2">
               <p className="px-2 pb-2 pt-1 text-xs font-bold tracking-[0.12em] text-muted-foreground">OFFICIAL MATCHES</p>
-              {matchesQuery.data.matches.length ? <div className="max-h-64 overflow-y-auto"><div className="grid gap-1">
+              {matchesQuery.data.matches.length ? <div className="max-h-64 overflow-y-auto"><div className="grid grid-cols-1 gap-1">
                 {matchesQuery.data.matches.map(match => <button key={match.crn} type="button" disabled={Boolean(crn)} onClick={() => setCrn(match.crn)} className="flex min-h-13 items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition hover:bg-teal-50 disabled:opacity-60 dark:hover:bg-teal-950/30">
                   <span><span className="block font-semibold">{match.studentName}</span><span className="mt-0.5 block text-xs text-muted-foreground">{match.subsection} · {match.mentoringGroup ?? "Mentoring group not listed"}</span></span>
                   <span className="shrink-0 text-sm font-bold text-teal-700 dark:text-teal-300">CRN {match.crn}</span>

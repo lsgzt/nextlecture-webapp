@@ -1,5 +1,7 @@
 import { AIChatBox, type Message as ChatMessage } from "@/components/AIChatBox";
+import { AppBottomNav } from "@/components/AppBottomNav";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { UniversalSearch } from "@/components/UniversalSearch";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { streamGeminiSyllabusAnswer, streamServerFallbackSyllabusAnswer } from "@/lib/gemini-syllabus";
@@ -8,7 +10,7 @@ import { loadOfficialSyllabusDocument } from "@/lib/syllabus-document";
 import { readStoredStudentProfile } from "@/lib/student-profile-storage";
 import { BRAND_LOGO_URL, SYLLABUS_SOURCE_URL } from "@shared/config";
 import { DEFAULT_GEMINI_MODEL_ID, type GeminiSyllabusSettings, type SyllabusChatMessage, type SyllabusConversation } from "@shared/syllabus-chat";
-import { ArrowLeft, BookOpenText, ChevronRight, CirclePlus, KeyRound, MessageSquareText, PanelLeft, ShieldCheck, Sparkles, TriangleAlert } from "lucide-react";
+import { BookOpenText, ChevronRight, CirclePlus, KeyRound, MessageSquareText, PanelLeft, ShieldCheck, Sparkles, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link } from "wouter";
 
@@ -159,18 +161,18 @@ export default function SyllabusPage() {
   return (
     <div className="min-h-screen bg-[#f6f8f7] text-foreground dark:bg-[#101917]">
       <header className="app-topbar">
-        <div className="container flex h-17 items-center justify-between gap-3">
+        <div className="container flex h-16 items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
-            <Link href="/app" className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-border bg-card text-muted-foreground transition hover:text-teal-700 dark:hover:text-teal-300" aria-label="Back to timetable">
-              <ArrowLeft className="h-4 w-4" />
+            <Link href="/" aria-label="NextLecture home">
+              <img src={BRAND_LOGO_URL} alt="NextLecture timetable logo" width={32} height={32} className="h-8 w-8 shrink-0 rounded-xl object-cover shadow-sm shadow-teal-950/25" />
             </Link>
-            <img src={BRAND_LOGO_URL} alt="NextLecture timetable logo" width={32} height={32} className="h-8 w-8 shrink-0 rounded-xl object-cover shadow-sm shadow-teal-950/25" />
             <div className="min-w-0">
               <p className="truncate font-display text-lg font-semibold tracking-[-0.04em]">Syllabus AI</p>
               <p className="text-[0.65rem] font-semibold tracking-[0.13em] text-teal-700 dark:text-teal-300">OFFICIAL GNDEC SOURCE</p>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            <UniversalSearch />
             <ThemeToggle />
             <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
               <DialogTrigger asChild>
@@ -207,7 +209,7 @@ export default function SyllabusPage() {
         </div>
       </header>
 
-      <main className="container max-w-7xl py-6 sm:py-9">
+      <main className="container max-w-7xl py-6 app-bottom-clearance sm:py-9">
         <div className="mb-6 grid gap-5 rounded-[1.6rem] border border-teal-200 bg-gradient-to-br from-teal-50 via-card to-card p-5 shadow-sm dark:border-teal-950/80 dark:from-teal-950/30 sm:p-7 lg:grid-cols-[1fr_auto] lg:items-end">
           <div>
             <p className="eyebrow"><Sparkles className="h-3.5 w-3.5" /> SOURCE-GROUNDED STUDY HELP</p>
@@ -254,6 +256,7 @@ export default function SyllabusPage() {
           </section>
         </div>
       </main>
+      <AppBottomNav />
     </div>
   );
 }

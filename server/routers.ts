@@ -11,6 +11,7 @@ import { getPreviousPapers, getPreviousPaperSessions } from "./previousPapers";
 import { recoverAndroidRegistrationNumber } from "./androidProfileRecovery";
 import { getVacantRooms } from "./vacantRooms";
 import { getHolidayFeed, getNoticeFeed } from "./campusFeeds";
+import { getDailyQuote } from "./dailyQuote";
 import {
   createMarkAttendanceSession,
   getMarkAttendanceSession,
@@ -214,6 +215,19 @@ export const appRouter = router({
           });
         }
       }),
+    // ZenQuotes "quote of the day" — same feed as the Android home screen.
+    // Cached server-side until the 05:32 IST rotation; see server/dailyQuote.ts.
+    dailyQuote: publicProcedure.query(async () => {
+      try {
+        return await getDailyQuote();
+      } catch (error) {
+        throw new TRPCError({
+          code: "BAD_GATEWAY",
+          message: error instanceof Error ? error.message : "Couldn't load today's quote.",
+          cause: error,
+        });
+      }
+    }),
   }),
 
   markAttendance: router({
