@@ -241,6 +241,13 @@ export default function FacultyMembersPage() {
     setPhotoOpen(false);
   }, [selectedId]);
 
+  // Always land at the top of the page (list or detail). Wouter does not
+  // reset window scroll on navigation, so without this the faculty page
+  // inherits the previous route's scrollY and appears already scrolled up.
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [selectedId]);
+
   const roomsQuery = trpc.vacantRooms.data.useQuery(undefined, {
     enabled: Boolean(selectedId),
     staleTime: 5 * 60 * 1000,
@@ -291,12 +298,12 @@ export default function FacultyMembersPage() {
 
   function openMember(profileId: string) {
     navigate(`/faculty?id=${encodeURIComponent(profileId)}`);
-    window.scrollTo({ top: 0 });
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }
 
   function backToList() {
     navigate("/faculty");
-    window.scrollTo({ top: 0 });
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }
 
   const slots = member ? (schedules?.get(member.profile_id) ?? null) : null;
