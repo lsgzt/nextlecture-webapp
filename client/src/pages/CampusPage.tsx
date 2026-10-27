@@ -326,6 +326,12 @@ export default function CampusPage() {
     setTab(nextTab);
   }, [location]);
 
+  // Tab switch (Notices ↔ Holidays) stays on the same route, so ScrollToTop
+  // does not run — reset scroll so the chosen panel always starts at the top.
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [tab]);
+
   const holidays = holidaysQuery.data?.holidays ?? [];
   const notices = noticesQuery.data?.notices ?? [];
   const refreshing = holidaysQuery.isFetching || noticesQuery.isFetching;
