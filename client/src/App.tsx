@@ -4,6 +4,7 @@ import NotFound from "@/pages/NotFound";
 import { Analytics } from "@vercel/analytics/react";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { ScrollToTop } from "./components/ScrollToTop";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import SyllabusPage from "./pages/SyllabusPage";
@@ -52,6 +53,7 @@ export default function App() {
         <TooltipProvider>
           <Toaster />
           <Router />
+          <ScrollToTop />
           <Analytics />
         </TooltipProvider>
       </ThemeProvider>
