@@ -336,9 +336,24 @@ export async function runFacultyAttendanceSync(): Promise<FacultySyncReport> {
 
     for (let i = 0; i < slotRows.length; i += 200) {
       const batch = slotRows.slice(i, i + 200);
+      const dbBatch = batch.map((slot) => ({
+        teacher_id: slot.teacherId,
+        day_of_week: slot.dayOfWeek,
+        start_time: slot.startTime,
+        end_time: slot.endTime,
+        subject_name: slot.subjectName,
+        branch: slot.branch,
+        year: slot.year,
+        section: slot.section,
+        timetable_group: slot.timetableGroup,
+        lecture_type: slot.lectureType,
+        venue: slot.venue,
+        source_url: slot.sourceUrl,
+        is_active: true,
+      }));
       const { error } = await admin
         .from("faculty_timetable_slots")
-        .upsert(batch, { onConflict: "teacher_id,day_of_week,start_time,timetable_group,subject_name" });
+        .upsert(dbBatch, { onConflict: "teacher_id,day_of_week,start_time,timetable_group,subject_name" });
       if (error) throw new Error(`Timetable slot upsert failed: ${error.message}`);
     }
 
