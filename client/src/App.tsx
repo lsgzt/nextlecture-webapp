@@ -17,6 +17,12 @@ import CampusPage from "./pages/CampusPage";
 import MarkAttendancePage from "./pages/MarkAttendancePage";
 import FacultyMembersPage from "./pages/FacultyMembersPage";
 import Learn from "./pages/Learn";
+import { FacultyLogin } from "./pages/faculty/login";
+import { FacultyDashboard } from "./pages/faculty/dashboard";
+import { FacultyTimetable } from "./pages/faculty/timetable";
+import { FacultyAttendance } from "./pages/faculty/attendance";
+import { FacultySession } from "./pages/faculty/session";
+import { FacultyProfile } from "./pages/faculty/profile";
 
 function Router() {
   return (
@@ -24,6 +30,12 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/app" component={TimetableApp} />
       <Route path="/faculty" component={FacultyMembersPage} />
+      <Route path="/faculty/login" component={FacultyLogin} />
+      <Route path="/faculty/dashboard" component={FacultyDashboard} />
+      <Route path="/faculty/timetable" component={FacultyTimetable} />
+      <Route path="/faculty/attendance" component={FacultyAttendance} />
+      <Route path="/faculty/attendance/:rest?" component={FacultySession} />
+      <Route path="/faculty/profile" component={FacultyProfile} />
       <Route path="/vacant-rooms" component={VacantRoomsPage} />
       <Route path="/campus" component={CampusPage} />
       <Route path="/attendance" component={AttendancePage} />

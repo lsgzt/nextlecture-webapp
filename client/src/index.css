@@ -662,3 +662,199 @@
   }
   .learn-shimmer::after { animation: none; }
 }
+
+/* ============================================================
+   NextLecture Faculty — UI system (scoped to .f-scope)
+   An ink-and-slate register: warm paper, deep navy, moss green.
+   Sibling of the Learn design system.
+   ============================================================ */
+
+.f-scope {
+  --f-paper: #F6F4ED;
+  --f-paper-2: #EFEDE3;
+  --f-surface: #FFFFFF;
+  --f-ink: #1C2733;
+  --f-ink-2: #4A5A69;
+  --f-ink-3: #8391A0;
+  --f-navy: #16294C;
+  --f-navy-deep: #0F1E3A;
+  --f-green: #0D5E4D;
+  --f-green-deep: #0A4638;
+  --f-tint: #E4EDE6;
+  --f-tint-2: #F0F3EA;
+  --f-line: #E2DFD6;
+  --f-shadow: 0 1px 2px rgba(28, 39, 51, 0.05), 0 18px 44px -22px rgba(28, 39, 51, 0.28);
+  --f-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer components {
+  .f-scope ::selection {
+    background: rgba(13, 94, 77, 0.18);
+  }
+
+  .f-grain {
+    position: relative;
+    isolation: isolate;
+  }
+  .f-grain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.12;
+    mix-blend-mode: overlay;
+    border-radius: inherit;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  }
+
+  .f-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    font-weight: 500;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--f-ink-3);
+  }
+
+  .f-scope .truncate,
+  .f-scope [class*="line-clamp"] {
+    min-width: 0;
+  }
+
+  /* nav link with sliding underline */
+  .f-navlink {
+    position: relative;
+    color: var(--f-ink-2);
+    transition: color 180ms var(--f-ease);
+  }
+  .f-navlink::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 100%;
+    bottom: -5px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--f-navy);
+    transition: right 280ms var(--f-ease);
+  }
+  .f-navlink:hover { color: var(--f-ink); }
+  .f-navlink[data-active="true"] { color: var(--f-ink); }
+  .f-navlink[data-active="true"]::after { right: 0; }
+
+  .f-handlink {
+    color: var(--f-green);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    text-decoration-color: color-mix(in oklab, var(--f-green) 38%, transparent);
+    transition: text-decoration-color 180ms var(--f-ease), color 180ms var(--f-ease);
+  }
+  .f-handlink:hover { text-decoration-color: var(--f-green); }
+
+  /* buttons */
+  .f-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 2.75rem;
+    padding: 0 1.15rem;
+    border-radius: 0.9rem;
+    font-size: 0.875rem;
+    font-weight: 650;
+    letter-spacing: -0.005em;
+    border: 1px solid transparent;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    transition:
+      transform 160ms var(--f-ease),
+      background-color 180ms var(--f-ease),
+      border-color 180ms var(--f-ease),
+      color 180ms var(--f-ease),
+      box-shadow 200ms var(--f-ease);
+  }
+  .f-btn:active:not(:disabled) { transform: translateY(1px) scale(0.985); }
+  .f-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .f-btn-primary {
+    background: var(--f-navy);
+    color: #F0F4F8;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      0 10px 22px -12px rgba(15, 30, 58, 0.65);
+  }
+  .f-btn-primary:hover:not(:disabled) {
+    background: var(--f-navy-deep);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      0 14px 26px -12px rgba(15, 30, 58, 0.7);
+  }
+
+  .f-btn-ghost {
+    background: var(--f-surface);
+    color: var(--f-ink);
+    border-color: var(--f-line);
+    box-shadow: 0 1px 2px rgba(28, 39, 51, 0.04);
+  }
+  .f-btn-ghost:hover:not(:disabled) {
+    border-color: var(--f-navy);
+    color: var(--f-navy);
+  }
+
+  .f-btn-quiet {
+    background: transparent;
+    color: var(--f-ink-2);
+    height: 2.5rem;
+  }
+  .f-btn-quiet:hover:not(:disabled) {
+    color: var(--f-navy);
+    background: rgba(22, 41, 76, 0.07);
+  }
+
+  /* cards */
+  .f-card {
+    background: var(--f-surface);
+    border: 1px solid var(--f-line);
+    border-radius: 1.1rem;
+  }
+  .f-card-interactive {
+    transition:
+      transform 260ms var(--f-ease),
+      box-shadow 260ms var(--f-ease),
+      border-color 260ms var(--f-ease);
+  }
+  .f-card-interactive:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--f-shadow);
+    border-color: color-mix(in oklab, var(--f-navy) 24%, var(--f-line));
+  }
+
+  /* form controls */
+  .f-input {
+    width: 100%;
+    height: 3rem;
+    border-radius: 0.9rem;
+    border: 1px solid var(--f-line);
+    background: var(--f-surface);
+    padding: 0 0.95rem;
+    font-size: 0.925rem;
+    color: var(--f-ink);
+    transition: border-color 180ms var(--f-ease), box-shadow 180ms var(--f-ease);
+  }
+  .f-input::placeholder { color: var(--f-ink-3); }
+  .f-input:focus {
+    outline: none;
+    border-color: var(--f-navy);
+    box-shadow: 0 0 0 4px rgba(22, 41, 76, 0.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .f-card-interactive,
+  .f-navlink::after {
+    transition-duration: 0.01ms !important;
+  }
+}

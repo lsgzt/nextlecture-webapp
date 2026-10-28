@@ -11,6 +11,7 @@ import { createAttendanceProxyHandler } from "./attendanceProxy";
 import { getAndroidStudentDirectory } from "./androidProfileRecovery";
 import { registerFcmToken, runNotificationCheck, sendCustomNotification } from "./notifications";
 import { refreshExternalCaches } from "./cacheRefresh";
+import { runFacultyAttendanceSync } from "./facultyAttendanceSync";
 
 /**
  * Creates the shared HTTP application for local hosting and serverless adapters.
@@ -260,6 +261,27 @@ export function createApp() {
     } catch (error) {
       console.error("[LMS directory] lookup failed:", error instanceof Error ? error.message : error);
       res.status(502).json({ message: "The official section list is unavailable right now." });
+    }
+  });
+  /**
+   * Faculty attendance sync — writes ONLY to the separate "attendance_record"
+   * Supabase project (see server/facultyAttendanceSync.ts). Admin-protected:
+   * requires the FACULTY_SYNC_SECRET header so roster imports, assignment
+   * management and timetable refreshes stay restricted to authorized runs.
+   */
+  app.post("/api/faculty/sync", async (req, res) => {
+    const expected = process.env.FACULTY_SYNC_SECRET;
+    const supplied = req.header("x-faculty-sync-secret") || req.header("authorization")?.replace(/^Bearer\s+/i, "") || "";
+    if (!expected || supplied !== expected) {
+      res.status(401).json({ message: "Unauthorized. Configure and supply FACULTY_SYNC_SECRET to run the faculty sync." });
+      return;
+    }
+    try {
+      const report = await runFacultyAttendanceSync();
+      res.status(report.status === "failed" ? 500 : 200).json(report);
+    } catch (error) {
+      console.error("[Faculty sync] failed:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: error instanceof Error ? error.message : "The faculty sync failed." });
     }
   });
   app.use(
