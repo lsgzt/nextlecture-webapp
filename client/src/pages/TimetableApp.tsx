@@ -14,7 +14,7 @@ import { UniversalSearch } from "@/components/UniversalSearch";
 import { trpc } from "@/lib/trpc";
 import { getStudentProfileDetailFields, isClassRepresentative } from "@/lib/student-profile-display";
 import { getPreferredTimetableGroup } from "@/lib/timetable-selection";
-import { DAY_ORDER, formatLectureType, getTimeParts, getDayLabel, getLecturesForDay, getNextLecture, getTodayLectures, getTomorrowLectures, humanizeDuration, lectureStatus, timeToMinutes } from "@/lib/timetable-ui";
+import { DAY_ORDER, enrichTimetableWithMentorProfile, formatLectureType, getTimeParts, getDayLabel, getLecturesForDay, getNextLecture, getTodayLectures, getTomorrowLectures, humanizeDuration, lectureStatus, timeToMinutes } from "@/lib/timetable-ui";
 import { readStoredStudentProfile, saveStudentProfile as persistStudentProfile } from "@/lib/student-profile-storage";
 import { getLectureTypeStyle } from "@/lib/lecture-type-style";
 import { BRAND_LOGO_URL } from "@shared/config";
@@ -321,6 +321,13 @@ export default function TimetableApp() {
   const data = dashboardQuery.data ?? (localTimetable?.timetable.group.code === selectedGroup ? localTimetable : null);
   const groups = groupsQuery.data?.groups ?? (data ? [data.timetable.group] : []);
 
+  // Mentoring cells in the official timetable omit teacher and room. Prefer the
+  // mentor name + venue already stored on the student profile for those slots.
+  const displayTimetable = useMemo(
+    () => enrichTimetableWithMentorProfile(data?.timetable ?? null, studentProfile),
+    [data?.timetable, studentProfile],
+  );
+
   // Universal search deep links: /app?group=CODE switches the timetable group.
   useEffect(() => {
     const shared = new URLSearchParams(window.location.search).get("group")?.trim().toUpperCase();
@@ -331,9 +338,9 @@ export default function TimetableApp() {
     }
   }, [location, groups, selectedGroup]);
 
-  const todayLectures = useMemo(() => getTodayLectures(data?.timetable ?? null, now), [data?.timetable, now]);
+  const todayLectures = useMemo(() => getTodayLectures(displayTimetable, now), [displayTimetable, now]);
   const tomorrow = useMemo(() => { const value = new Date(now); value.setDate(value.getDate() + 1); return value; }, [now]);
-  const tomorrowLectures = useMemo(() => getTomorrowLectures(data?.timetable ?? null, now), [data?.timetable, now]);
+  const tomorrowLectures = useMemo(() => getTomorrowLectures(displayTimetable, now), [displayTimetable, now]);
   const dayTimeline = useMemo<TimelineItem[]>(() => (data?.timetable.timeSlots ?? []).flatMap<TimelineItem>(slot => {
     const scheduled = todayLectures.find(lecture => lecture.startTime === slot);
     if (scheduled) return [{ kind: "lecture" as const, lecture: scheduled }];
@@ -346,7 +353,7 @@ export default function TimetableApp() {
     const coveredByLongLecture = tomorrowLectures.some(lecture => timeToMinutes(lecture.startTime) < timeToMinutes(slot) && timeToMinutes(lecture.endTime) > timeToMinutes(slot));
     return coveredByLongLecture ? [] : [{ kind: "free" as const, startTime: slot }];
   }), [data?.timetable.timeSlots, tomorrowLectures]);
-  const next = useMemo(() => getNextLecture(data?.timetable ?? null, now), [data?.timetable, now]);
+  const next = useMemo(() => getNextLecture(displayTimetable, now), [displayTimetable, now]);
   const temporarySectionBranch = useMemo(() => getTemporarySectionBranch(selectedGroup), [selectedGroup]);
   const profileMatchesSelectedBranch = studentProfile?.branch === temporarySectionBranch;
   const firstName = studentProfile && profileMatchesSelectedBranch ? studentProfile.studentName.trim().split(/\s+/)[0] ?? "" : "";
@@ -583,7 +590,7 @@ export default function TimetableApp() {
               ) : (
                 <div className="mt-5 space-y-4">
                   {DAY_ORDER.map(day => {
-                    const lectures = getLecturesForDay(data.timetable, day);
+                    const lectures = getLecturesForDay(displayTimetable, day);
                     return (
                       <section key={day} id={`week-day-${day}`} className="scroll-mt-24 rounded-2xl border border-border bg-background p-4">
                         <div className="flex items-center justify-between gap-3">
