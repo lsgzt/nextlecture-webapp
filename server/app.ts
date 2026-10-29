@@ -305,8 +305,6 @@ export function createApp() {
       res.status(500).json({ message: "Could not render OG image" });
     }
   });
-    }
-  });
 
   app.use(
     "/api/trpc",
