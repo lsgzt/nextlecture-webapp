@@ -53,3 +53,62 @@ describe("getNextLecture weekend handling", () => {
     expect(getDayLabel(next!.dayOffset, sunday)).toBe("Tomorrow");
   });
 });
+
+
+import { enrichLectureWithMentorProfile, enrichTimetableWithMentorProfile, isMentoringSubject } from "./timetable-ui";
+
+describe("mentoring profile enrichment", () => {
+  const mentoring = {
+    day: "Monday" as const,
+    startTime: "14:30",
+    endTime: "15:30",
+    subject: "MENTORING",
+    teacher: null,
+    venue: null,
+    lectureType: null,
+    raw: "MENTORING",
+    confidence: "partial" as const,
+  };
+
+  it("detects mentoring subjects", () => {
+    expect(isMentoringSubject("MENTORING")).toBe(true);
+    expect(isMentoringSubject("Mentoring")).toBe(true);
+    expect(isMentoringSubject("CHEMISTRY")).toBe(false);
+  });
+
+  it("fills teacher and venue from the student profile when the timetable cell is empty", () => {
+    const enriched = enrichLectureWithMentorProfile(mentoring, {
+      mentorName: "Er. Jaspreet Kaur",
+      venue: "HW LAB",
+    });
+    expect(enriched.teacher).toBe("Er. Jaspreet Kaur");
+    expect(enriched.venue).toBe("HW LAB");
+  });
+
+  it("does not override an explicit timetable teacher or room", () => {
+    const enriched = enrichLectureWithMentorProfile(
+      { ...mentoring, teacher: "Official Teacher", venue: "S100" },
+      { mentorName: "Er. Jaspreet Kaur", venue: "HW LAB" },
+    );
+    expect(enriched.teacher).toBe("Official Teacher");
+    expect(enriched.venue).toBe("S100");
+  });
+
+  it("leaves non-mentoring lectures untouched", () => {
+    const lecture = { ...mentoring, subject: "CHEMISTRY", teacher: null, venue: null };
+    expect(enrichLectureWithMentorProfile(lecture, { mentorName: "X", venue: "Y" })).toBe(lecture);
+  });
+
+  it("enriches every mentoring cell on a timetable", () => {
+    const tt = {
+      group: { code: "ITB2", sourceYear: "2026" },
+      timeSlots: ["14:30"],
+      lectures: [mentoring, { ...mentoring, day: "Wednesday" as const, subject: "BEE", teacher: null, venue: null }],
+    };
+    const enriched = enrichTimetableWithMentorProfile(tt, { mentorName: "Er. Jaspreet Kaur", venue: "HW LAB" });
+    expect(enriched?.lectures[0].teacher).toBe("Er. Jaspreet Kaur");
+    expect(enriched?.lectures[0].venue).toBe("HW LAB");
+    expect(enriched?.lectures[1].teacher).toBeNull();
+    expect(enriched?.lectures[1].venue).toBeNull();
+  });
+});
