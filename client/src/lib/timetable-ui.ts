@@ -142,3 +142,44 @@ export function deriveGroupParts(code: string) {
     section: match?.[2] || "All",
   };
 }
+
+/** Official FET cells for mentoring omit teacher and room. Students already
+ *  have mentor name + venue on their saved profile — fill those gaps so the
+ *  home schedule matches what the profile card already shows. */
+export function isMentoringSubject(subject: string | null | undefined): boolean {
+  const value = (subject ?? "").trim().toUpperCase();
+  if (!value) return false;
+  return value === "MENTORING" || value === "MENTOR" || value.startsWith("MENTORING ") || /\bMENTOR(ING)?\b/.test(value);
+}
+
+export type MentorProfileFields = {
+  mentorName?: string | null;
+  venue?: string | null;
+};
+
+export function enrichLectureWithMentorProfile(lecture: Lecture, profile: MentorProfileFields | null | undefined): Lecture {
+  if (!profile || !isMentoringSubject(lecture.subject)) return lecture;
+  const mentorName = profile.mentorName?.trim() || null;
+  const venue = profile.venue?.trim() || null;
+  if ((!mentorName || lecture.teacher) && (!venue || lecture.venue)) return lecture;
+  return {
+    ...lecture,
+    teacher: lecture.teacher?.trim() || mentorName,
+    venue: lecture.venue?.trim() || venue,
+  };
+}
+
+export function enrichTimetableWithMentorProfile(
+  timetable: GroupTimetable | null,
+  profile: MentorProfileFields | null | undefined,
+): GroupTimetable | null {
+  if (!timetable) return null;
+  if (!profile?.mentorName?.trim() && !profile?.venue?.trim()) return timetable;
+  let changed = false;
+  const lectures = timetable.lectures.map(lecture => {
+    const next = enrichLectureWithMentorProfile(lecture, profile);
+    if (next !== lecture) changed = true;
+    return next;
+  });
+  return changed ? { ...timetable, lectures } : timetable;
+}
