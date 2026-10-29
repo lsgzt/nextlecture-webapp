@@ -20,6 +20,14 @@
       "destination": "/api"
     },
     {
+      "source": "/mark-attendance",
+      "destination": "/api"
+    },
+    {
+      "source": "/mark-attendance/(.*)",
+      "destination": "/api"
+    },
+    {
       "source": "/((?!api$|api/).*)",
       "destination": "/index.html"
     }
