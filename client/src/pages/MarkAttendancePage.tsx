@@ -1,9 +1,179 @@
-import { CheckCircle2, ClipboardCopy, Link2, LoaderCircle, Search, UserCheck, Users } from "lucide-react";
+import { CheckCircle2, ClipboardCopy, ImageIcon, Link2, LoaderCircle, MessageCircle, Search, Share2, UserCheck, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { Link, useParams } from "wouter";
 import { TEMPORARY_SECTION_BRANCHES, type TemporarySectionBranch } from "@shared/student-profile";
 import { trpc } from "@/lib/trpc";
 import { ThemeToggle } from "@/components/ThemeToggle";
+
+
+type PresentAttendee = { studentName: string; crn: string };
+
+function buildPresentListText(subjectName: string, branch: string, attendees: PresentAttendee[]) {
+  const lines = [
+    `*NextLecture — Present list*`,
+    `*${subjectName}* · ${branch}`,
+    `${attendees.length} student${attendees.length === 1 ? "" : "s"} marked present`,
+    "",
+    ...attendees.map((a, i) => `${i + 1}. ${a.studentName} — CRN ${a.crn}`),
+    "",
+    "_Shared from NextLecture_",
+  ];
+  return lines.join("\n");
+}
+
+async function sharePresentListText(subjectName: string, branch: string, attendees: PresentAttendee[]) {
+  const text = buildPresentListText(subjectName, branch, attendees);
+  const title = `Present list — ${subjectName}`;
+
+  if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+    try {
+      await navigator.share({ title, text });
+      return;
+    } catch (error) {
+      // User cancelled or share unsupported for this payload — fall through.
+      if (error instanceof DOMException && error.name === "AbortError") return;
+    }
+  }
+
+  const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+  window.open(waUrl, "_blank", "noopener,noreferrer");
+}
+
+function wrapCanvasText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const trial = current ? `${current} ${word}` : word;
+    if (ctx.measureText(trial).width <= maxWidth) {
+      current = trial;
+    } else {
+      if (current) lines.push(current);
+      current = word;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.length ? lines : [text];
+}
+
+async function sharePresentListImage(subjectName: string, branch: string, attendees: PresentAttendee[]) {
+  const width = 1080;
+  const paddingX = 56;
+  const rowHeight = 56;
+  const headerHeight = 220;
+  const footerHeight = 90;
+  const height = headerHeight + attendees.length * rowHeight + footerHeight + 40;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = Math.max(height, 640);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    toast.error("Could not prepare the image on this device");
+    return;
+  }
+
+  // Background
+  ctx.fillStyle = "#0f1f1c";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Teal header band
+  const headerGrad = ctx.createLinearGradient(0, 0, 0, headerHeight);
+  headerGrad.addColorStop(0, "#0f766e");
+  headerGrad.addColorStop(1, "#115e59");
+  ctx.fillStyle = headerGrad;
+  ctx.fillRect(0, 0, width, headerHeight);
+
+  // Brand
+  ctx.fillStyle = "rgba(255,255,255,0.85)";
+  ctx.font = "700 28px Manrope, system-ui, sans-serif";
+  ctx.fillText("NEXTLECTURE", paddingX, 56);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "700 48px 'Playfair Display', Georgia, serif";
+  const titleLines = wrapCanvasText(ctx, subjectName, width - paddingX * 2);
+  let y = 110;
+  for (const line of titleLines.slice(0, 2)) {
+    ctx.fillText(line, paddingX, y);
+    y += 54;
+  }
+
+  ctx.fillStyle = "rgba(204,251,241,0.95)";
+  ctx.font = "600 26px Manrope, system-ui, sans-serif";
+  ctx.fillText(`${branch} · ${attendees.length} present`, paddingX, headerHeight - 28);
+
+  // Rows
+  let rowY = headerHeight + 8;
+  attendees.forEach((a, index) => {
+    if (index % 2 === 0) {
+      ctx.fillStyle = "rgba(255,255,255,0.03)";
+      ctx.fillRect(0, rowY, width, rowHeight);
+    }
+    ctx.fillStyle = "rgba(148,163,184,0.9)";
+    ctx.font = "700 22px Manrope, system-ui, sans-serif";
+    ctx.fillText(`${index + 1}.`, paddingX, rowY + 36);
+
+    ctx.fillStyle = "#f8fafc";
+    ctx.font = "600 26px Manrope, system-ui, sans-serif";
+    const name = a.studentName.length > 36 ? `${a.studentName.slice(0, 34)}…` : a.studentName;
+    ctx.fillText(name, paddingX + 48, rowY + 36);
+
+    ctx.fillStyle = "#5eead4";
+    ctx.font = "700 24px Manrope, system-ui, sans-serif";
+    const crnLabel = `CRN ${a.crn}`;
+    const crnWidth = ctx.measureText(crnLabel).width;
+    ctx.fillText(crnLabel, width - paddingX - crnWidth, rowY + 36);
+    rowY += rowHeight;
+  });
+
+  // Footer brand bar
+  ctx.fillStyle = "rgba(15,118,110,0.35)";
+  ctx.fillRect(0, canvas.height - footerHeight, width, footerHeight);
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.font = "700 24px Manrope, system-ui, sans-serif";
+  ctx.fillText("NextLecture", paddingX, canvas.height - 36);
+  ctx.fillStyle = "rgba(153,246,228,0.85)";
+  ctx.font = "500 20px Manrope, system-ui, sans-serif";
+  ctx.fillText("nextlecture.vercel.app · Present list", paddingX + 170, canvas.height - 36);
+
+  const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/png"));
+  if (!blob) {
+    toast.error("Could not create the present-list image");
+    return;
+  }
+
+  const file = new File([blob], `nextlecture-present-${attendees.length}.png`, { type: "image/png" });
+  const canShareFile =
+    typeof navigator !== "undefined" &&
+    typeof navigator.share === "function" &&
+    typeof navigator.canShare === "function" &&
+    navigator.canShare({ files: [file] });
+
+  if (canShareFile) {
+    try {
+      await navigator.share({
+        files: [file],
+        title: `Present list — ${subjectName}`,
+        text: buildPresentListText(subjectName, branch, attendees),
+      });
+      return;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+    }
+  }
+
+  // Fallback: download the PNG so the teacher can attach it in WhatsApp.
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = file.name;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
+  toast.success("Image saved — attach it in WhatsApp");
+}
 
 function CreateSessionPanel() {
   const [subjectName, setSubjectName] = useState("");
@@ -319,14 +489,50 @@ function SessionPanel({ sessionId }: { sessionId: string }) {
       </section>
 
       <section className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
-        <div className="flex items-center justify-between border-b border-border px-5 py-4 sm:px-7">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4 sm:px-7">
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-teal-700" />
             <h2 className="font-display text-lg font-semibold tracking-[-0.04em]">Present list</h2>
+            <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-bold text-teal-800 dark:bg-teal-950/40 dark:text-teal-200">
+              {session.presentCount}
+            </span>
           </div>
-          <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-bold text-teal-800 dark:bg-teal-950/40 dark:text-teal-200">
-            {session.presentCount}
-          </span>
+          {session.attendees.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void sharePresentListText(session.subjectName, session.branch, session.attendees)}
+                className="inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-[#25D366] px-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#1ebe57] active:scale-[0.98]"
+              >
+                <MessageCircle className="h-4 w-4" aria-hidden="true" />
+                WhatsApp
+              </button>
+              <button
+                type="button"
+                onClick={() => void sharePresentListImage(session.subjectName, session.branch, session.attendees)}
+                className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-border bg-background px-3 text-sm font-bold text-foreground transition hover:border-teal-700/30 hover:text-teal-700 dark:hover:text-teal-300 active:scale-[0.98]"
+              >
+                <ImageIcon className="h-4 w-4" aria-hidden="true" />
+                Share image
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(buildPresentListText(session.subjectName, session.branch, session.attendees));
+                    toast.success("Present list copied");
+                  } catch {
+                    toast.error("Could not copy the list");
+                  }
+                }}
+                className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-border bg-background px-3 text-sm font-bold text-muted-foreground transition hover:text-foreground active:scale-[0.98]"
+                aria-label="Copy present list"
+              >
+                <ClipboardCopy className="h-4 w-4" aria-hidden="true" />
+                Copy
+              </button>
+            </div>
+          )}
         </div>
         <div className="max-h-96 overflow-y-auto">
           {session.attendees.length === 0 ? (
