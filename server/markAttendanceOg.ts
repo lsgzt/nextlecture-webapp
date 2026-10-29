@@ -55,7 +55,6 @@ export function renderMarkAttendanceOgHtml(opts: {
   <meta name="twitter:title" content="${title}" />
   <meta name="twitter:description" content="${description}" />
   <meta name="twitter:image" content="${imageUrl}" />
-  <meta http-equiv="refresh" content="0;url=${pageUrl}" />
 </head>
 <body>
   <p>${title}</p>
