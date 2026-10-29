@@ -86,10 +86,10 @@ export async function handleMarkAttendancePreview(req: Request, res: Response) {
   // Raster OG card (WhatsApp/Facebook need PNG). Subject is also baked into
   // og:title / description. The SVG endpoint below remains available for clients
   // that request a subject-specific illustration.
-  const imageUrl = absoluteUrl(
-    req,
-    `/api/og/mark-attendance.png?subject=${encodeURIComponent(subject)}&count=${count}&branch=${encodeURIComponent(session?.branch ?? "")}`,
-  );
+  // WhatsApp/Facebook need a raster image. Use the branded PNG for the card art
+  // and put the live subject into og:title / description (shown large in previews).
+  // Subject-specific SVG art is available at /api/og/mark-attendance.png?subject=…
+  const imageUrl = absoluteUrl(req, "/og-mark-attendance.png");
 
   res
     .status(200)
