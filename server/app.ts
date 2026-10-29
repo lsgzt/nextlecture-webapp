@@ -12,6 +12,7 @@ import { getAndroidStudentDirectory } from "./androidProfileRecovery";
 import { registerFcmToken, runNotificationCheck, sendCustomNotification } from "./notifications";
 import { refreshExternalCaches } from "./cacheRefresh";
 import { runFacultyAttendanceSync } from "./facultyAttendanceSync";
+import { handleMarkAttendanceOgImage, handleMarkAttendancePreview, isSocialPreviewBot } from "./markAttendanceOg";
 
 /**
  * Creates the shared HTTP application for local hosting and serverless adapters.
@@ -284,6 +285,38 @@ export function createApp() {
       res.status(500).json({ message: error instanceof Error ? error.message : "The faculty sync failed." });
     }
   });
+
+  // Mark-attendance share links: social crawlers get session-specific OG tags +
+  // image; real browsers receive the SPA shell so the React route still works.
+  app.get(["/mark-attendance", "/mark-attendance/:sessionId"], async (req, res, next) => {
+    try {
+      if (!isSocialPreviewBot(req.get("user-agent") ?? undefined)) {
+        const host = req.get("x-forwarded-host") || req.get("host") || "nextlecture.vercel.app";
+        const proto = (req.get("x-forwarded-proto") || "https").split(",")[0].trim();
+        const indexResponse = await fetch(`${proto}://${host}/index.html`);
+        if (!indexResponse.ok) {
+          next();
+          return;
+        }
+        const html = await indexResponse.text();
+        res.status(200).setHeader("Content-Type", "text/html; charset=utf-8").setHeader("Cache-Control", "no-store").send(html);
+        return;
+      }
+      await handleMarkAttendancePreview(req, res);
+    } catch (error) {
+      console.error("[Mark attendance OG] preview failed:", error instanceof Error ? error.message : error);
+      next();
+    }
+  });
+  app.get("/api/og/mark-attendance.png", (req, res) => {
+    try {
+      handleMarkAttendanceOgImage(req, res);
+    } catch (error) {
+      console.error("[Mark attendance OG] image failed:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Could not render OG image" });
+    }
+  });
+
   app.use(
     "/api/trpc",
     createExpressMiddleware({
