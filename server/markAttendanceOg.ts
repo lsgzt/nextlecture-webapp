@@ -1,13 +1,6 @@
 import type { Request, Response } from "express";
 import { getMarkAttendanceSession } from "./markAttendance";
 
-const BOT_UA =
-  /whatsapp|facebookexternalhit|facebot|twitterbot|linkedinbot|slackbot|discordbot|telegrambot|pinterest|googlebot|bingbot|yandex|duckduckbot|baiduspider|embedly|quora link preview|showyoubot|outbrain|vkshare|w3c_validator|redditbot|applebot|skypeuripreview/i;
-
-export function isSocialPreviewBot(userAgent: string | undefined): boolean {
-  return Boolean(userAgent && BOT_UA.test(userAgent));
-}
-
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -23,8 +16,7 @@ function absoluteUrl(req: Request, path: string): string {
   return `${proto}://${host}${path}`;
 }
 
-/** HTML shell for WhatsApp / Facebook / X link previews on mark-attendance links. */
-export function renderMarkAttendanceOgHtml(opts: {
+function buildPreviewMeta(opts: {
   pageUrl: string;
   imageUrl: string;
   title: string;
@@ -34,46 +26,40 @@ export function renderMarkAttendanceOgHtml(opts: {
   const description = escapeHtml(opts.description);
   const pageUrl = escapeHtml(opts.pageUrl);
   const imageUrl = escapeHtml(opts.imageUrl);
-  return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>${title}</title>
-  <meta name="description" content="${description}" />
-  <meta property="og:site_name" content="NextLecture" />
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="${pageUrl}" />
-  <meta property="og:title" content="${title}" />
-  <meta property="og:description" content="${description}" />
-  <meta property="og:image" content="${imageUrl}" />
-  <meta property="og:image:secure_url" content="${imageUrl}" />
-  <meta property="og:image:type" content="image/png" />
-  <meta property="og:image:width" content="1500" />
-  <meta property="og:image:height" content="844" />
-  <meta property="og:image:alt" content="${title}" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="${title}" />
-  <meta name="twitter:description" content="${description}" />
-  <meta name="twitter:image" content="${imageUrl}" />
-</head>
-<body>
-  <p>${title}</p>
-  <p>${description}</p>
-  <p><a href="${pageUrl}">Open in NextLecture</a></p>
-</body>
-</html>`;
+  return `
+    <title>${title}</title>
+    <meta name="description" content="${description}" />
+    <meta property="og:site_name" content="NextLecture" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="${pageUrl}" />
+    <meta property="og:title" content="${title}" />
+    <meta property="og:description" content="${description}" />
+    <meta property="og:image" content="${imageUrl}" />
+    <meta property="og:image:secure_url" content="${imageUrl}" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1500" />
+    <meta property="og:image:height" content="844" />
+    <meta property="og:image:alt" content="${title}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${title}" />
+    <meta name="twitter:description" content="${description}" />
+    <meta name="twitter:image" content="${imageUrl}" />
+  `;
 }
 
-export async function handleMarkAttendancePreview(req: Request, res: Response) {
+/**
+ * Always serve the real SPA for /mark-attendance (no secondary crawler page).
+ * Inject session-specific Open Graph tags into index.html so WhatsApp / social
+ * previews still show the subject and the dedicated mark-attendance image.
+ */
+export async function handleMarkAttendancePage(req: Request, res: Response) {
   const sessionId = typeof req.params.sessionId === "string" ? req.params.sessionId.trim() : "";
   const session = sessionId ? await getMarkAttendanceSession(sessionId) : null;
 
   const subject = session?.subjectName?.trim() || "Mark your attendance";
   const branch = session?.branch ? ` · ${session.branch}` : "";
   const count = session?.presentCount ?? 0;
-  const title = session
-    ? `Mark present — ${subject}`
-    : "Mark your attendance · NextLecture";
+  const title = session ? `Mark present — ${subject}` : "Mark your attendance · NextLecture";
   const description = session
     ? count > 0
       ? `${count} student${count === 1 ? "" : "s"} marked present so far. Search your official name and mark present${branch}.`
@@ -82,32 +68,41 @@ export async function handleMarkAttendancePreview(req: Request, res: Response) {
 
   const pagePath = sessionId ? `/mark-attendance/${encodeURIComponent(sessionId)}` : "/mark-attendance";
   const pageUrl = absoluteUrl(req, pagePath);
-  // Raster OG card (WhatsApp/Facebook need PNG). Subject is also baked into
-  // og:title / description. The SVG endpoint below remains available for clients
-  // that request a subject-specific illustration.
-  // WhatsApp/Facebook need a raster image. Use the branded PNG for the card art
-  // and put the live subject into og:title / description (shown large in previews).
-  // Subject-specific SVG art is available at /api/og/mark-attendance.png?subject=…
   const imageUrl = absoluteUrl(req, "/og-mark-attendance.png");
+
+  const host = req.get("x-forwarded-host") || req.get("host") || "nextlecture.vercel.app";
+  const proto = (req.get("x-forwarded-proto") || "https").split(",")[0].trim();
+  const indexResponse = await fetch(`${proto}://${host}/index.html`);
+  if (!indexResponse.ok) {
+    throw new Error(`Could not load SPA shell (${indexResponse.status})`);
+  }
+  let html = await indexResponse.text();
+
+  const metaBlock = buildPreviewMeta({ pageUrl, imageUrl, title, description });
+
+  // Strip the generic site-wide OG / Twitter tags from index.html, then inject
+  // the session-specific set so previews match this mark-attendance link.
+  html = html
+    .replace(/<title>[^<]*<\/title>/i, "")
+    .replace(/<meta\s+name="description"[^>]*>/gi, "")
+    .replace(/<meta\s+property="og:[^"]+"[^>]*>/gi, "")
+    .replace(/<meta\s+name="twitter:[^"]+"[^>]*>/gi, "");
+
+  if (/<head[^>]*>/i.test(html)) {
+    html = html.replace(/<head[^>]*>/i, match => `${match}\n${metaBlock}`);
+  } else {
+    html = metaBlock + html;
+  }
 
   res
     .status(200)
     .setHeader("Content-Type", "text/html; charset=utf-8")
-    .setHeader("Cache-Control", "public, max-age=60, s-maxage=120")
-    .send(
-      renderMarkAttendanceOgHtml({
-        pageUrl,
-        imageUrl,
-        title,
-        description,
-      }),
-    );
+    .setHeader("Cache-Control", "no-store")
+    .send(html);
 }
 
 /**
- * Runtime OG image (SVG). Social crawlers that accept SVG will show the subject;
- * others still get a useful title/description from the HTML shell. A static PNG
- * fallback is also published at /og-mark-attendance.png.
+ * Subject-aware SVG card (optional). Raster fallback lives at /og-mark-attendance.png.
  */
 export function handleMarkAttendanceOgImage(req: Request, res: Response) {
   const subjectRaw = typeof req.query.subject === "string" ? req.query.subject : "Mark your attendance";
@@ -125,7 +120,6 @@ export function handleMarkAttendanceOgImage(req: Request, res: Response) {
         ? `${branch} · Mark present`
         : "Search your name and mark present";
 
-  // Split long subjects onto two lines for the SVG.
   const words = subject.split(" ");
   let line1 = subject;
   let line2 = "";
