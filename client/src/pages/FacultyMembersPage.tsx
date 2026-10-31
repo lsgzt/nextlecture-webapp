@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import {
   ArrowLeft,
@@ -235,17 +235,29 @@ export default function FacultyMembersPage() {
     return () => window.clearInterval(tick);
   }, []);
 
+  // Remember list scroll so "Back to directory" (and browser back) put the
+  // student back where they were, instead of jumping to the top of 300+ teachers.
+  const listScrollY = useRef(0);
+
   // Reset the schedule tab + photo viewer when opening another teacher.
   useEffect(() => {
     setDetailTab("today");
     setPhotoOpen(false);
   }, [selectedId]);
 
-  // Always land at the top of the page (list or detail). Wouter does not
-  // reset window scroll on navigation, so without this the faculty page
-  // inherits the previous route's scrollY and appears already scrolled up.
+  // Detail opens at the top; returning to the list restores the saved offset.
   useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    if (selectedId) {
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+      return;
+    }
+    const y = listScrollY.current;
+    // Double rAF: wait until the list has painted before restoring scroll.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: y, left: 0, behavior: "instant" });
+      });
+    });
   }, [selectedId]);
 
   const roomsQuery = trpc.vacantRooms.data.useQuery(undefined, {
@@ -297,13 +309,12 @@ export default function FacultyMembersPage() {
   const member = selectedId ? facultyByProfileId(selectedId) : null;
 
   function openMember(profileId: string) {
+    listScrollY.current = window.scrollY;
     navigate(`/faculty?id=${encodeURIComponent(profileId)}`);
-    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }
 
   function backToList() {
     navigate("/faculty");
-    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }
 
   const slots = member ? (schedules?.get(member.profile_id) ?? null) : null;
