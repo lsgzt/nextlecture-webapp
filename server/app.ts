@@ -13,6 +13,7 @@ import { registerFcmToken, runNotificationCheck, sendCustomNotification } from "
 import { refreshExternalCaches } from "./cacheRefresh";
 import { runFacultyAttendanceSync } from "./facultyAttendanceSync";
 import { handleMarkAttendanceOgImage, handleMarkAttendancePage } from "./markAttendanceOg";
+import { handleAboutDeveloperPage } from "./aboutDeveloperPage";
 
 /**
  * Creates the shared HTTP application for local hosting and serverless adapters.
@@ -294,6 +295,15 @@ export function createApp() {
       await handleMarkAttendancePage(req, res);
     } catch (error) {
       console.error("[Mark attendance] page shell failed:", error instanceof Error ? error.message : error);
+      next();
+    }
+  });
+  // Developer attribution page: inject unique title, description, canonical, OG, and JSON-LD.
+  app.get("/about-developer", async (req, res, next) => {
+    try {
+      await handleAboutDeveloperPage(req, res);
+    } catch (error) {
+      console.error("[About developer] page shell failed:", error instanceof Error ? error.message : error);
       next();
     }
   });

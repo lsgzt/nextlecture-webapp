@@ -28,6 +28,10 @@
       "destination": "/api"
     },
     {
+      "source": "/about-developer",
+      "destination": "/api"
+    },
+    {
       "source": "/((?!api$|api/).*)",
       "destination": "/index.html"
     }

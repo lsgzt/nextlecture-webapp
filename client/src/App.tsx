@@ -17,6 +17,7 @@ import CampusPage from "./pages/CampusPage";
 import MarkAttendancePage from "./pages/MarkAttendancePage";
 import FacultyMembersPage from "./pages/FacultyMembersPage";
 import Learn from "./pages/Learn";
+import AboutDeveloperPage from "./pages/AboutDeveloperPage";
 import { FacultyLogin } from "./pages/faculty/login";
 import { FacultyDashboard } from "./pages/faculty/dashboard";
 import { FacultyTimetable } from "./pages/faculty/timetable";
@@ -29,6 +30,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/app" component={TimetableApp} />
+      <Route path="/about-developer" component={AboutDeveloperPage} />
       <Route path="/faculty" component={FacultyMembersPage} />
       <Route path="/faculty/login" component={FacultyLogin} />
       <Route path="/faculty/dashboard" component={FacultyDashboard} />
