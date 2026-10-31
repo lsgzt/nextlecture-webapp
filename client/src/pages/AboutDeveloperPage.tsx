@@ -75,8 +75,26 @@ export default function AboutDeveloperPage() {
 
         <article className="mt-10 rounded-3xl border border-border bg-card p-6 shadow-sm sm:p-8">
           <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
-            <div className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl bg-teal-700 text-2xl font-bold tracking-tight text-white shadow-md shadow-teal-950/20">
-              LS
+            <div
+              className="relative grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-2xl border border-border bg-stone-100 shadow-md shadow-stone-950/10 dark:border-white/10 dark:bg-stone-950 dark:shadow-black/40"
+              aria-hidden="true"
+            >
+              {/* Dark mark for light mode */}
+              <img
+                src="/lsgz-logo-light.png"
+                alt=""
+                width={80}
+                height={80}
+                className="h-14 w-14 object-contain dark:hidden"
+              />
+              {/* White mark for dark mode */}
+              <img
+                src="/lsgz-logo-dark.png"
+                alt=""
+                width={80}
+                height={80}
+                className="hidden h-14 w-14 object-contain dark:block"
+              />
             </div>
             <div className="min-w-0 flex-1">
               <h2 className="font-display text-2xl font-semibold tracking-[-0.04em] sm:text-3xl">
@@ -205,9 +223,7 @@ export default function AboutDeveloperPage() {
       <footer className="container border-t border-border/70 py-10">
         <p className="text-xs text-muted-foreground">
           © {new Date().getFullYear()} NextLecture · Built and maintained by{" "}
-          <span className="font-semibold text-teal-700 dark:text-teal-300">
-            Lovepreet Singh (LSGZ)
-          </span>
+          <span className="font-semibold text-teal-700 dark:text-teal-300">LSGZ</span>
         </p>
       </footer>
     </div>
