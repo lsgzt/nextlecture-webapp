@@ -2,7 +2,7 @@
  * Product settings deliberately kept in one place.
  * Replace ANDROID_APP_URL when the downloadable Android APK is ready.
  */
-export const ANDROID_APP_URL = "https://drive.proton.me/urls/3PS5082VZ8#K582RXubhvLq";
+export const ANDROID_APP_URL = "https://github.com/lsgzt/nextlecture-android/releases/latest/download/gndec-timetable.apk";
 
 /** Publicly served logo assets used by deployed headers and device icon metadata. */
 export const BRAND_LOGO_URL = "/nextlecture-logo.png";
