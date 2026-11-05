@@ -15,6 +15,7 @@ import { runFacultyAttendanceSync } from "./facultyAttendanceSync";
 import { handleMarkAttendanceOgImage, handleMarkAttendancePage } from "./markAttendanceOg";
 import { handleAboutDeveloperPage } from "./aboutDeveloperPage";
 import { handlePrivacyPolicyPage } from "./privacyPolicyPage";
+import { handleTermsPage } from "./termsPage";
 
 /**
  * Creates the shared HTTP application for local hosting and serverless adapters.
@@ -314,6 +315,15 @@ export function createApp() {
       await handlePrivacyPolicyPage(req, res);
     } catch (error) {
       console.error("[Privacy policy] page shell failed:", error instanceof Error ? error.message : error);
+      next();
+    }
+  });
+  // Terms & Conditions page: inject unique title, description, canonical, and OG tags.
+  app.get("/terms", async (req, res, next) => {
+    try {
+      await handleTermsPage(req, res);
+    } catch (error) {
+      console.error("[Terms] page shell failed:", error instanceof Error ? error.message : error);
       next();
     }
   });

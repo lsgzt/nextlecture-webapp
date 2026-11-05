@@ -799,6 +799,12 @@ export default function PrivacyPolicyPage() {
             Back to Home
           </Link>
           <Link
+            href="/terms"
+            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-border bg-card px-5 text-sm font-semibold text-foreground transition hover:border-teal-700/30 hover:text-teal-700 dark:hover:text-teal-300"
+          >
+            Terms &amp; Conditions
+          </Link>
+          <Link
             href="/about-developer"
             className="inline-flex min-h-11 items-center justify-center rounded-xl border border-border bg-card px-5 text-sm font-semibold text-foreground transition hover:border-teal-700/30 hover:text-teal-700 dark:hover:text-teal-300"
           >
