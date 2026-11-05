@@ -14,6 +14,7 @@ import { refreshExternalCaches } from "./cacheRefresh";
 import { runFacultyAttendanceSync } from "./facultyAttendanceSync";
 import { handleMarkAttendanceOgImage, handleMarkAttendancePage } from "./markAttendanceOg";
 import { handleAboutDeveloperPage } from "./aboutDeveloperPage";
+import { handlePrivacyPolicyPage } from "./privacyPolicyPage";
 
 /**
  * Creates the shared HTTP application for local hosting and serverless adapters.
@@ -304,6 +305,15 @@ export function createApp() {
       await handleAboutDeveloperPage(req, res);
     } catch (error) {
       console.error("[About developer] page shell failed:", error instanceof Error ? error.message : error);
+      next();
+    }
+  });
+  // Privacy policy page: inject unique title, description, canonical, and OG tags.
+  app.get("/privacy", async (req, res, next) => {
+    try {
+      await handlePrivacyPolicyPage(req, res);
+    } catch (error) {
+      console.error("[Privacy policy] page shell failed:", error instanceof Error ? error.message : error);
       next();
     }
   });
