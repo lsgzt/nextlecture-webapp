@@ -14,6 +14,8 @@ export type AnnouncementType =
   | "feature"
   | string;
 
+export type AnnouncementPlatform = "android-app" | "web-app" | "both";
+
 export type Announcement = {
   id: string;
   title: string;
@@ -22,6 +24,8 @@ export type Announcement = {
   type?: AnnouncementType;
   /** Optional URL — when set, the whole card is clickable. */
   link?: string;
+  /** Optional platform target; missing or empty values are shown on both platforms. */
+  for?: AnnouncementPlatform | "";
   /** Audience filters (empty / "all" = everyone at that level). Comma/;/| lists are OR'd. */
   branch?: string;
   section?: string;
@@ -128,6 +132,11 @@ function coerceAnnouncement(item: unknown): Announcement | null {
   if (typeof row.message !== "string" || !row.message.trim()) return null;
 
   const linkRaw = typeof row.link === "string" ? row.link.trim() : "";
+  const platformRaw = typeof row.for === "string" ? row.for.trim() : "";
+  const platform =
+    platformRaw === "android-app" || platformRaw === "web-app" || platformRaw === "both"
+      ? platformRaw
+      : "";
   return {
     id: row.id.trim(),
     title: row.title.trim(),
@@ -135,6 +144,7 @@ function coerceAnnouncement(item: unknown): Announcement | null {
     publishedAt: typeof row.publishedAt === "string" ? row.publishedAt : "",
     type: typeof row.type === "string" ? row.type : "info",
     link: linkRaw || undefined,
+    for: platform,
     branch: typeof row.branch === "string" ? row.branch : undefined,
     section: typeof row.section === "string" ? row.section : undefined,
     subsection: typeof row.subsection === "string" ? row.subsection : undefined,
@@ -157,6 +167,7 @@ export function normalizeAnnouncements(
   const active = list
     .map(coerceAnnouncement)
     .filter((item): item is Announcement => item !== null)
+    .filter(item => item.for !== "android-app")
     .filter(item => matchesAudience(item, audience))
     .sort((a, b) => {
       const left = Date.parse(a.publishedAt) || 0;

@@ -43,27 +43,121 @@ describe("normalizeAnnouncements", () => {
     expect(result.map(item => item.id)).toEqual(["new"]);
   });
 
-  it("preserves link, branch, section, subsection, and type", () => {
-    const result = normalizeAnnouncements({
-      announcements: [
-        {
-          id: "it-lab",
-          title: "Lab closed",
-          message: "OS1 closed",
-          publishedAt: "2026-09-16T10:00:00Z",
-          type: "warn",
-          branch: "IT",
-          section: "",
-          subsection: "",
-          link: "https://example.com/notice",
-          active: true,
-        },
-      ],
-    });
+  it("preserves link, platform, branch, section, subsection, and type", () => {
+    const result = normalizeAnnouncements(
+      {
+        announcements: [
+          {
+            id: "it-lab",
+            title: "Lab closed",
+            message: "OS1 closed",
+            publishedAt: "2026-09-16T10:00:00Z",
+            type: "warn",
+            for: "web-app",
+            branch: "IT",
+            section: "",
+            subsection: "",
+            link: "https://example.com/notice",
+            active: true,
+          },
+        ],
+      },
+      { branch: "IT" },
+    );
     expect(result).toHaveLength(1);
     expect(result[0].link).toBe("https://example.com/notice");
     expect(result[0].type).toBe("warn");
+    expect(result[0].for).toBe("web-app");
     expect(result[0].branch).toBe("IT");
+  });
+
+  it("filters announcements by platform while keeping backward compatibility", () => {
+    const cases = [
+      { id: "android", for: "android-app", included: false },
+      { id: "web", for: "web-app", included: true },
+      { id: "both", for: "both", included: true },
+      { id: "missing", included: true },
+      { id: "empty", for: "", included: true },
+    ];
+
+    for (const announcement of cases) {
+      const result = normalizeAnnouncements({
+        announcements: [
+          {
+            ...announcement,
+            title: announcement.id,
+            message: announcement.id,
+            publishedAt: "2026-09-16T10:00:00Z",
+            active: true,
+          },
+        ],
+      });
+      expect(result.map(item => item.id), announcement.id).toEqual(
+        announcement.included ? [announcement.id] : [],
+      );
+    }
+  });
+
+  it("combines platform filtering with branch, section, and subsection targeting", () => {
+    const payload = {
+      announcements: [
+        {
+          id: "android-targeted",
+          title: "Android targeted",
+          message: "Hidden on web",
+          publishedAt: "2026-09-18T12:00:00Z",
+          for: "android-app",
+          branch: "IT",
+          section: "ITB",
+          subsection: "ITB2",
+          active: true,
+        },
+        {
+          id: "web-targeted",
+          title: "Web targeted",
+          message: "Shown on web",
+          publishedAt: "2026-09-18T11:00:00Z",
+          for: "web-app",
+          branch: "IT",
+          section: "ITB",
+          subsection: "ITB2",
+          active: true,
+        },
+      ],
+    };
+
+    expect(
+      normalizeAnnouncements(payload, {
+        branch: "IT",
+        section: "ITB",
+        subsection: "ITB2",
+      }).map(item => item.id),
+    ).toEqual(["web-targeted"]);
+
+    expect(
+      normalizeAnnouncements(payload, {
+        branch: "CS",
+        section: "ITB",
+        subsection: "ITB2",
+      }),
+    ).toEqual([]);
+  });
+
+  it("keeps inactive announcements excluded even when targeted to the webapp", () => {
+    expect(
+      normalizeAnnouncements({
+        announcements: [
+          {
+            id: "inactive-web",
+            title: "Inactive",
+            message: "Hidden",
+            publishedAt: "2026-09-16T10:00:00Z",
+            for: "web-app",
+            active: false,
+          },
+        ],
+      }),
+    ).toEqual([]);
   });
 
   it("filters by audience when profile is provided", () => {
