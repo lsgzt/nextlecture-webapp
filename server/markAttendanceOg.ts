@@ -11,10 +11,8 @@ function escapeHtml(value: string): string {
 }
 
 function absoluteUrl(req: Request, path: string): string {
-  const host = req.get("x-forwarded-host") || req.get("host") || "localhost";
-  const proto = (req.get("x-forwarded-proto") || (process.env.NODE_ENV === "production" ? "https" : "http"))
-    .split(",")[0]
-    .trim();
+  const host = req.get("x-forwarded-host") || req.get("host") || "nextlecture.vercel.app";
+  const proto = (req.get("x-forwarded-proto") || "https").split(",")[0].trim();
   return `${proto}://${host}${path}`;
 }
 
@@ -72,10 +70,8 @@ export async function handleMarkAttendancePage(req: Request, res: Response) {
   const pageUrl = absoluteUrl(req, pagePath);
   const imageUrl = absoluteUrl(req, "/og-mark-attendance.png");
 
-  const host = req.get("x-forwarded-host") || req.get("host") || "localhost";
-  const proto = (req.get("x-forwarded-proto") || (process.env.NODE_ENV === "production" ? "https" : "http"))
-    .split(",")[0]
-    .trim();
+  const host = req.get("x-forwarded-host") || req.get("host") || "nextlecture.vercel.app";
+  const proto = (req.get("x-forwarded-proto") || "https").split(",")[0].trim();
   const indexResponse = await fetch(`${proto}://${host}/index.html`);
   if (!indexResponse.ok) {
     throw new Error(`Could not load SPA shell (${indexResponse.status})`);
@@ -116,7 +112,6 @@ export function handleMarkAttendanceOgImage(req: Request, res: Response) {
 
   const safe = (value: string) =>
     value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  const footerUrl = safe(absoluteUrl(req, "/mark-attendance"));
 
   const subtitle =
     count > 0
@@ -162,7 +157,7 @@ export function handleMarkAttendanceOgImage(req: Request, res: Response) {
   <circle cx="1280" cy="300" r="72" fill="none" stroke="#ccfbf1" stroke-width="6"/>
   <path d="M1248 304 L1268 324 L1318 268" fill="none" stroke="#f0fdfa" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
   <rect x="0" y="720" width="1500" height="124" fill="#081c1a"/>
-  <text x="72" y="790" font-family="Manrope, system-ui, sans-serif" font-size="28" font-weight="600" fill="#5eead4">${footerUrl}</text>
+  <text x="72" y="790" font-family="Manrope, system-ui, sans-serif" font-size="28" font-weight="600" fill="#5eead4">nextlecture.vercel.app/mark-attendance</text>
   <text x="1100" y="790" font-family="Manrope, system-ui, sans-serif" font-size="26" font-weight="600" fill="#94a3b8">GNDEC · Present list</text>
 </svg>`;
 
