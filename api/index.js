@@ -1,7 +1,7 @@
 // server/app.ts
 import express from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { createClient as createClient2 } from "@supabase/supabase-js";
+import { createClient as createClient3 } from "@supabase/supabase-js";
 
 // server/routers.ts
 import { TRPCError as TRPCError3 } from "@trpc/server";
@@ -1223,8 +1223,8 @@ function getPreviousPaperSessions() {
 async function getPreviousPapers(sessionId) {
   const session = PREVIOUS_PAPER_SESSIONS.find((item) => item.id === sessionId);
   if (!session) throw new Error("That paper archive session is not available.");
-  const cached = cache2.get(session.id);
-  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) return { session, papers: cached.papers, fetchedAt: cached.fetchedAt, freshness: "fresh" };
+  const cached2 = cache2.get(session.id);
+  if (cached2 && Date.now() - cached2.fetchedAt < CACHE_TTL_MS) return { session, papers: cached2.papers, fetchedAt: cached2.fetchedAt, freshness: "fresh" };
   const response = await axios3.get(`https://drive.google.com/drive/folders/${session.id}`, {
     headers: { Accept: "text/html", "User-Agent": "NextLecture/1.0 (previous papers catalog)" },
     responseType: "text",
@@ -1877,7 +1877,7 @@ function merge(docs, incompleteRoots) {
 async function refresh(force) {
   const now = Date.now();
   const previous = await getKnownCache3();
-  const cached = previous ?? { docs: [], incompleteRoots: [], fetchedAtMillis: 0 };
+  const cached2 = previous ?? { docs: [], incompleteRoots: [], fetchedAtMillis: 0 };
   let discovered = null;
   try {
     discovered = await discoverAll();
@@ -1887,7 +1887,7 @@ async function refresh(force) {
   const reused = /* @__PURE__ */ new Map();
   const rootsToFetch = [];
   for (const root of ROOM_SOURCE_ROOTS) {
-    const cachedDoc = cached.docs.find((d) => d.rootId === root.id) ?? null;
+    const cachedDoc = cached2.docs.find((d) => d.rootId === root.id) ?? null;
     const candidates = discovered?.get(root.id) ?? null;
     const desiredUrl = candidates?.roomUrls[0] ?? candidates?.groupUrls[0] ?? null;
     const shouldReuse = cachedDoc != null && (candidates == null || !force && desiredUrl === cachedDoc.url);
@@ -1912,7 +1912,7 @@ async function refresh(force) {
   const incomplete = [];
   for (const root of ROOM_SOURCE_ROOTS) {
     const fresh = fetched.get(root.id) ?? null;
-    const cachedDoc = cached.docs.find((d) => d.rootId === root.id) ?? null;
+    const cachedDoc = cached2.docs.find((d) => d.rootId === root.id) ?? null;
     const candidates = discovered?.get(root.id) ?? null;
     if (fresh) docs.push(fresh);
     else if (reused.has(root.id)) docs.push(reused.get(root.id));
@@ -1923,9 +1923,9 @@ async function refresh(force) {
     }
   }
   if (!docs.length) {
-    if (cached.docs.length) {
-      memoryCache = cached;
-      return merge(cached.docs, cached.incompleteRoots);
+    if (cached2.docs.length) {
+      memoryCache = cached2;
+      return merge(cached2.docs, cached2.incompleteRoots);
     }
     throw new Error("No department room timetable could be loaded right now");
   }
@@ -2180,6 +2180,74 @@ async function getHolidayFeed(forceRefresh = false) {
 }
 async function getNoticeFeed(forceRefresh = false) {
   return loadNotices(forceRefresh);
+}
+
+// shared/daily-quote.ts
+var ZENQUOTES_TODAY_URL = "https://zenquotes.io/api/today";
+var QUOTE_ZONE = "Asia/Kolkata";
+var FETCH_HOUR_IST = 5;
+var FETCH_MINUTE_IST = 32;
+function quoteDayKey(epochMillis) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: QUOTE_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date(epochMillis));
+  const get = (type) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+function quoteTriggerAt(epochMillis) {
+  return Date.parse(
+    `${quoteDayKey(epochMillis)}T${String(FETCH_HOUR_IST).padStart(2, "0")}:${String(FETCH_MINUTE_IST).padStart(2, "0")}:00+05:30`
+  );
+}
+function nextQuoteTriggerAfter(epochMillis) {
+  const todayTrigger = quoteTriggerAt(epochMillis);
+  return epochMillis < todayTrigger ? todayTrigger : todayTrigger + 24 * 36e5;
+}
+
+// server/dailyQuote.ts
+var UPSTREAM_TIMEOUT_MS = 8e3;
+var cached = null;
+var inflight = null;
+async function fetchUpstream() {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+  try {
+    const response = await fetch(ZENQUOTES_TODAY_URL, {
+      headers: { Accept: "application/json" },
+      signal: controller.signal,
+      cache: "no-store"
+    });
+    if (!response.ok) throw new Error(`ZenQuotes returned ${response.status}`);
+    const body = await response.json();
+    const entry = Array.isArray(body) ? body[0] : void 0;
+    const text2 = typeof entry?.q === "string" ? entry.q.trim() : "";
+    const author = typeof entry?.a === "string" ? entry.a.trim() : "";
+    if (!text2) throw new Error("ZenQuotes returned no quote");
+    return { text: text2, author };
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("ZenQuotes did not answer in time");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+async function getDailyQuote() {
+  const now = Date.now();
+  if (cached && now < cached.expiresAt) return cached.quote;
+  if (!inflight) {
+    inflight = fetchUpstream().then((quote) => {
+      cached = { quote, expiresAt: nextQuoteTriggerAfter(Date.now()) };
+      return quote;
+    }).finally(() => {
+      inflight = null;
+    });
+  }
+  return inflight;
 }
 
 // server/markAttendance.ts
@@ -2489,6 +2557,19 @@ var appRouter = router({
         throw new TRPCError3({
           code: "BAD_GATEWAY",
           message: error instanceof Error ? error.message : "Couldn't load official college notices.",
+          cause: error
+        });
+      }
+    }),
+    // ZenQuotes "quote of the day" — same feed as the Android home screen.
+    // Cached server-side until the 05:32 IST rotation; see server/dailyQuote.ts.
+    dailyQuote: publicProcedure.query(async () => {
+      try {
+        return await getDailyQuote();
+      } catch (error) {
+        throw new TRPCError3({
+          code: "BAD_GATEWAY",
+          message: error instanceof Error ? error.message : "Couldn't load today's quote.",
           cause: error
         });
       }
@@ -3177,6 +3258,662 @@ async function refreshExternalCaches() {
   return { ok, startedAt, finishedAt, results };
 }
 
+// server/facultyAttendanceSync.ts
+import { createClient as createClient2 } from "@supabase/supabase-js";
+var WEEKDAYS2 = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+var BRANCHES = ["RAI", "MCA", "MBA", "BCA", "BBA", "CE", "CS", "EC", "EE", "IT", "ME"];
+function getFacultyAttendanceAdminClient() {
+  const url = (process.env.FACULTY_ATTENDANCE_SUPABASE_URL || process.env.VITE_FACULTY_ATTENDANCE_SUPABASE_URL || "").trim();
+  const secretKey = (process.env.FACULTY_ATTENDANCE_SUPABASE_SECRET_KEY || "").trim();
+  if (!url || !secretKey) return null;
+  if (!/jchoopzbwihjmhkjulfz\.supabase\.co/.test(url)) {
+    throw new Error(
+      `Refusing to sync: FACULTY_ATTENDANCE_SUPABASE_URL (${url.replace(/https:\/\//, "").split(".")[0]}) is not the attendance_record project. Faculty attendance data may only be written to the dedicated project.`
+    );
+  }
+  return createClient2(url, secretKey, { auth: { autoRefreshToken: false, persistSession: false } });
+}
+function norm(value) {
+  return (value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+function labelMatchesTeacher(cellTeacher, fullName) {
+  if (!cellTeacher) return false;
+  const target = norm(fullName);
+  const parts = cellTeacher.split(/[,/]| and /i);
+  return parts.some((part) => norm(part) === target);
+}
+function deriveYearBranchSection(groupCode) {
+  const dPrefix = /^D(\d)(.+)$/.exec(groupCode);
+  const year = dPrefix ? Number(dPrefix[1]) : 1;
+  const rest = dPrefix ? dPrefix[2] : groupCode;
+  const branch = BRANCHES.find((b) => rest.startsWith(b)) ?? rest.slice(0, 2);
+  const section = /\d$/.test(rest) ? rest.slice(0, -1) : rest;
+  return { year, branch, section };
+}
+async function runFacultyAttendanceSync() {
+  const report = {
+    startedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    finishedAt: null,
+    status: "success",
+    teachers: [],
+    students: {
+      sourceRecords: 0,
+      upserted: 0,
+      invalidRows: 0,
+      missingRollNumbers: 0,
+      duplicateRollNumbers: [],
+      groupsInDbWithoutRoster: []
+    },
+    timetable: { sourceUrl: null, sourceGeneratedAt: null, groupsExamined: 0 },
+    warnings: []
+  };
+  const admin = getFacultyAttendanceAdminClient();
+  if (!admin) {
+    throw new Error(
+      "Faculty sync is not configured. Set FACULTY_ATTENDANCE_SUPABASE_URL (or VITE_FACULTY_ATTENDANCE_SUPABASE_URL) and FACULTY_ATTENDANCE_SUPABASE_SECRET_KEY in the server environment."
+    );
+  }
+  const run = await admin.from("faculty_sync_runs").insert({}).select("id").single();
+  const runId = run.data?.id ?? null;
+  try {
+    const [timetableResult, directory] = await Promise.all([
+      getOfficialTimetable(true),
+      getAndroidStudentDirectory()
+    ]);
+    const payload = timetableResult.cache.data;
+    report.timetable.sourceUrl = timetableResult.cache.sourceUrl;
+    report.timetable.sourceGeneratedAt = payload.sourceGeneratedAt ?? null;
+    report.timetable.groupsExamined = payload.groups.length;
+    const { data: teacherRows, error: teacherError } = await admin.from("faculty_teachers").select("id,full_name,email,is_active");
+    if (teacherError) throw new Error(`Could not read faculty_teachers: ${teacherError.message}`);
+    const teachers = (teacherRows ?? []).filter((t2) => t2.is_active);
+    if (teachers.length === 0) {
+      report.warnings.push("No active teachers are registered in faculty_teachers \u2014 nothing to map. Run the provisioning script first.");
+    }
+    const assignmentRows = /* @__PURE__ */ new Map();
+    const slotRows = [];
+    for (const teacher of teachers) {
+      const matched = /* @__PURE__ */ new Set();
+      const unmatchedLabels = /* @__PURE__ */ new Set();
+      const byGroup = /* @__PURE__ */ new Map();
+      for (const groupTimetable of payload.timetables) {
+        const code = groupTimetable.group.code;
+        for (const lecture of groupTimetable.lectures) {
+          if (labelMatchesTeacher(lecture.teacher, teacher.full_name)) {
+            const list = byGroup.get(code) ?? [];
+            list.push(lecture);
+            byGroup.set(code, list);
+            matched.add(code);
+          } else if (lecture.teacher) {
+            const targetTokens = norm(teacher.full_name);
+            const cellTokens = norm(lecture.teacher);
+            if (targetTokens.length > 3 && cellTokens.includes(targetTokens.slice(0, 4)) && !labelMatchesTeacher(lecture.teacher, teacher.full_name)) {
+              unmatchedLabels.add(lecture.teacher);
+            }
+          }
+        }
+      }
+      byGroup.forEach((lectures, code) => {
+        const { year, branch, section } = deriveYearBranchSection(code);
+        const subjectSet = Array.from(new Set(lectures.map((l) => l.subject)));
+        subjectSet.forEach((subject) => {
+          const types = Array.from(new Set(lectures.filter((l) => l.subject === subject).map((l) => l.lectureType).filter(Boolean)));
+          const key = `${teacher.id}|${subject}|${code}`;
+          assignmentRows.set(key, {
+            teacher_id: teacher.id,
+            subject_name: subject,
+            branch,
+            year,
+            section,
+            timetable_group: code,
+            lecture_types: types.join(",")
+          });
+        });
+      });
+      const merged = /* @__PURE__ */ new Map();
+      byGroup.forEach((lectures, code) => {
+        lectures.forEach((lecture) => {
+          const key = `${lecture.day}|${lecture.startTime}|${lecture.subject}|${lecture.lectureType ?? ""}|${lecture.venue ?? ""}`;
+          const entry = merged.get(key);
+          if (entry) entry.groups.push(code);
+          else merged.set(key, { groups: [code], lecture });
+        });
+      });
+      merged.forEach(({ groups, lecture }) => {
+        const unique = Array.from(new Set(groups)).sort();
+        const { year, branch, section } = deriveYearBranchSection(unique[0]);
+        slotRows.push({
+          teacherId: teacher.id,
+          dayOfWeek: WEEKDAYS2.indexOf(lecture.day),
+          startTime: lecture.startTime,
+          endTime: lecture.endTime,
+          subjectName: lecture.subject,
+          branch,
+          year,
+          section,
+          timetableGroup: unique.join("+"),
+          lectureType: lecture.lectureType,
+          venue: lecture.venue,
+          sourceUrl: timetableResult.cache.sourceUrl
+        });
+      });
+      report.teachers.push({
+        email: teacher.email,
+        fullName: teacher.full_name,
+        matchedGroups: Array.from(matched).sort(),
+        unmatchedLabels: Array.from(unmatchedLabels).slice(0, 10),
+        assignments: 0,
+        // filled after upsert
+        slots: slotRows.filter((s) => s.teacherId === teacher.id).length
+      });
+    }
+    const seenRoll = /* @__PURE__ */ new Set();
+    const duplicates = /* @__PURE__ */ new Set();
+    let invalid = 0;
+    let missingRoll = 0;
+    const studentRows = [];
+    for (const record of directory) {
+      const roll = (record.registrationNumber ?? "").trim();
+      const name = (record.candidateName ?? "").trim();
+      const group = (record.subsection ?? "").trim();
+      if (!roll) {
+        missingRoll += 1;
+        continue;
+      }
+      if (!name || !(record.branch ?? "").trim() || !(record.section ?? "").trim() || !group) {
+        invalid += 1;
+        continue;
+      }
+      if (seenRoll.has(roll)) {
+        duplicates.add(roll);
+        continue;
+      }
+      seenRoll.add(roll);
+      studentRows.push({
+        roll_number: roll,
+        crn: (record.crn ?? "").trim() || null,
+        full_name: name,
+        branch: (record.branch ?? "").trim(),
+        year: 1,
+        // the official directory is the first-year roster
+        section: (record.section ?? "").trim(),
+        subsection: group,
+        timetable_group: group,
+        is_active: true
+      });
+    }
+    report.students.sourceRecords = directory.length;
+    report.students.missingRollNumbers = missingRoll;
+    report.students.invalidRows = invalid;
+    report.students.duplicateRollNumbers = Array.from(duplicates);
+    for (let i = 0; i < studentRows.length; i += 400) {
+      const batch = studentRows.slice(i, i + 400);
+      const { error } = await admin.from("faculty_students").upsert(batch, { onConflict: "roll_number", ignoreDuplicates: false });
+      if (error) throw new Error(`Student upsert failed (batch ${Math.floor(i / 400) + 1}): ${error.message}`);
+      report.students.upserted += batch.length;
+    }
+    const assignmentList = Array.from(assignmentRows.values());
+    for (let i = 0; i < assignmentList.length; i += 200) {
+      const batch = assignmentList.slice(i, i + 200);
+      const { error } = await admin.from("faculty_teaching_assignments").upsert(batch, { onConflict: "teacher_id,subject_name,timetable_group" });
+      if (error) throw new Error(`Assignment upsert failed: ${error.message}`);
+    }
+    for (const row of report.teachers) {
+      row.assignments = assignmentList.filter((a) => a.teacher_id === teachers.find((t2) => t2.email === row.email)?.id).length;
+    }
+    for (let i = 0; i < slotRows.length; i += 200) {
+      const batch = slotRows.slice(i, i + 200);
+      const dbBatch = batch.map((slot) => ({
+        teacher_id: slot.teacherId,
+        day_of_week: slot.dayOfWeek,
+        start_time: slot.startTime,
+        end_time: slot.endTime,
+        subject_name: slot.subjectName,
+        branch: slot.branch,
+        year: slot.year,
+        section: slot.section,
+        timetable_group: slot.timetableGroup,
+        lecture_type: slot.lectureType,
+        venue: slot.venue,
+        source_url: slot.sourceUrl,
+        is_active: true
+      }));
+      const { error } = await admin.from("faculty_timetable_slots").upsert(dbBatch, { onConflict: "teacher_id,day_of_week,start_time,timetable_group,subject_name" });
+      if (error) throw new Error(`Timetable slot upsert failed: ${error.message}`);
+    }
+    const neededGroups = /* @__PURE__ */ new Set([
+      ...assignmentList.map((a) => a.timetable_group),
+      ...slotRows.map((s) => s.timetableGroup.split("+")).flat()
+    ]);
+    const { data: covered } = await admin.from("faculty_students").select("timetable_group").in("timetable_group", Array.from(neededGroups));
+    const coveredSet = new Set((covered ?? []).map((r) => r.timetable_group));
+    report.students.groupsInDbWithoutRoster = Array.from(neededGroups).filter((g) => !coveredSet.has(g)).sort();
+    if (report.students.groupsInDbWithoutRoster.length > 0) {
+      report.warnings.push(
+        `No student roster exists for: ${report.students.groupsInDbWithoutRoster.join(", ")}. These classes stay in the timetable but attendance cannot be submitted for them until an administrator imports their roster (the bundled directory only covers first-year).`
+      );
+    }
+    if (missingRoll > 0 || invalid > 0 || duplicates.size > 0) {
+      report.status = "partial";
+    }
+    report.finishedAt = (/* @__PURE__ */ new Date()).toISOString();
+  } catch (error) {
+    report.status = "failed";
+    report.finishedAt = (/* @__PURE__ */ new Date()).toISOString();
+    if (runId) {
+      await admin.from("faculty_sync_runs").update({ status: "failed", finished_at: (/* @__PURE__ */ new Date()).toISOString(), report }).eq("id", runId);
+    }
+    throw error;
+  }
+  if (runId) {
+    await admin.from("faculty_sync_runs").update({ status: report.status, finished_at: report.finishedAt, report }).eq("id", runId);
+  }
+  return report;
+}
+
+// server/markAttendanceOg.ts
+function escapeHtml(value) {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function absoluteUrl(req, path) {
+  const host = req.get("x-forwarded-host") || req.get("host") || "nextlecture.vercel.app";
+  const proto = (req.get("x-forwarded-proto") || "https").split(",")[0].trim();
+  return `${proto}://${host}${path}`;
+}
+function buildPreviewMeta(opts) {
+  const title = escapeHtml(opts.title);
+  const description = escapeHtml(opts.description);
+  const pageUrl = escapeHtml(opts.pageUrl);
+  const imageUrl = escapeHtml(opts.imageUrl);
+  return `
+    <title>${title}</title>
+    <meta name="description" content="${description}" />
+    <meta property="og:site_name" content="NextLecture" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="${pageUrl}" />
+    <meta property="og:title" content="${title}" />
+    <meta property="og:description" content="${description}" />
+    <meta property="og:image" content="${imageUrl}" />
+    <meta property="og:image:secure_url" content="${imageUrl}" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1500" />
+    <meta property="og:image:height" content="844" />
+    <meta property="og:image:alt" content="${title}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${title}" />
+    <meta name="twitter:description" content="${description}" />
+    <meta name="twitter:image" content="${imageUrl}" />
+  `;
+}
+async function handleMarkAttendancePage(req, res) {
+  const sessionId = typeof req.params.sessionId === "string" ? req.params.sessionId.trim() : "";
+  const session = sessionId ? await getMarkAttendanceSession(sessionId) : null;
+  const subject = session?.subjectName?.trim() || "Mark your attendance";
+  const branch = session?.branch ? ` \xB7 ${session.branch}` : "";
+  const count = session?.presentCount ?? 0;
+  const title = session ? `Mark present \u2014 ${subject}` : "Mark your attendance \xB7 NextLecture";
+  const description = session ? count > 0 ? `${count} student${count === 1 ? "" : "s"} marked present so far. Search your official name and mark present${branch}.` : `Search your official name and mark present for ${subject}${branch}. Shared via NextLecture.` : "Create a shareable present list for your class. Students search their official name and mark present \u2014 no app install needed.";
+  const pagePath = sessionId ? `/mark-attendance/${encodeURIComponent(sessionId)}` : "/mark-attendance";
+  const pageUrl = absoluteUrl(req, pagePath);
+  const imageUrl = absoluteUrl(req, "/og-mark-attendance.png");
+  const host = req.get("x-forwarded-host") || req.get("host") || "nextlecture.vercel.app";
+  const proto = (req.get("x-forwarded-proto") || "https").split(",")[0].trim();
+  const indexResponse = await fetch(`${proto}://${host}/index.html`);
+  if (!indexResponse.ok) {
+    throw new Error(`Could not load SPA shell (${indexResponse.status})`);
+  }
+  let html = await indexResponse.text();
+  const metaBlock = buildPreviewMeta({ pageUrl, imageUrl, title, description });
+  html = html.replace(/<title>[^<]*<\/title>/i, "").replace(/<meta\s+name="description"[^>]*>/gi, "").replace(/<meta\s+property="og:[^"]+"[^>]*>/gi, "").replace(/<meta\s+name="twitter:[^"]+"[^>]*>/gi, "");
+  if (/<head[^>]*>/i.test(html)) {
+    html = html.replace(/<head[^>]*>/i, (match) => `${match}
+${metaBlock}`);
+  } else {
+    html = metaBlock + html;
+  }
+  res.status(200).setHeader("Content-Type", "text/html; charset=utf-8").setHeader("Cache-Control", "no-store").send(html);
+}
+function handleMarkAttendanceOgImage(req, res) {
+  const subjectRaw = typeof req.query.subject === "string" ? req.query.subject : "Mark your attendance";
+  const subject = subjectRaw.replace(/\s+/g, " ").trim().slice(0, 80) || "Mark your attendance";
+  const branch = typeof req.query.branch === "string" ? req.query.branch.trim().slice(0, 12) : "";
+  const count = Math.max(0, Number.parseInt(String(req.query.count ?? "0"), 10) || 0);
+  const safe = (value) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const subtitle = count > 0 ? `${count} marked present${branch ? ` \xB7 ${branch}` : ""}` : branch ? `${branch} \xB7 Mark present` : "Search your name and mark present";
+  const words = subject.split(" ");
+  let line1 = subject;
+  let line2 = "";
+  if (subject.length > 28 && words.length > 1) {
+    line1 = "";
+    for (const word of words) {
+      const trial = line1 ? `${line1} ${word}` : word;
+      if (trial.length <= 28) line1 = trial;
+      else {
+        line2 = words.slice(words.indexOf(word)).join(" ");
+        break;
+      }
+    }
+  }
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="844" viewBox="0 0 1500 844">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0f766e"/>
+      <stop offset="55%" stop-color="#115e59"/>
+      <stop offset="100%" stop-color="#0c1917"/>
+    </linearGradient>
+  </defs>
+  <rect width="1500" height="844" fill="url(#bg)"/>
+  <circle cx="1280" cy="220" r="200" fill="#5eead4" fill-opacity="0.12"/>
+  <circle cx="120" cy="720" r="160" fill="#2dd4bf" fill-opacity="0.10"/>
+  <rect x="72" y="72" width="260" height="56" rx="16" fill="#0d9488"/>
+  <text x="96" y="110" font-family="Manrope, system-ui, sans-serif" font-size="26" font-weight="700" fill="#f0fdfa" letter-spacing="0.08em">NEXTLECTURE</text>
+  <text x="72" y="230" font-family="Georgia, 'Playfair Display', serif" font-size="42" font-weight="700" fill="#99f6e4">Mark your attendance</text>
+  <text x="72" y="330" font-family="Georgia, 'Playfair Display', serif" font-size="64" font-weight="700" fill="#ffffff">${safe(line1)}</text>
+  ${line2 ? `<text x="72" y="410" font-family="Georgia, 'Playfair Display', serif" font-size="64" font-weight="700" fill="#ccfbf1">${safe(line2.slice(0, 40))}</text>` : ""}
+  <text x="72" y="${line2 ? 490 : 420}" font-family="Manrope, system-ui, sans-serif" font-size="32" font-weight="600" fill="#a7f3d0">${safe(subtitle)}</text>
+  <circle cx="1280" cy="300" r="88" fill="#0d9488"/>
+  <circle cx="1280" cy="300" r="72" fill="none" stroke="#ccfbf1" stroke-width="6"/>
+  <path d="M1248 304 L1268 324 L1318 268" fill="none" stroke="#f0fdfa" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="0" y="720" width="1500" height="124" fill="#081c1a"/>
+  <text x="72" y="790" font-family="Manrope, system-ui, sans-serif" font-size="28" font-weight="600" fill="#5eead4">nextlecture.vercel.app/mark-attendance</text>
+  <text x="1100" y="790" font-family="Manrope, system-ui, sans-serif" font-size="26" font-weight="600" fill="#94a3b8">GNDEC \xB7 Present list</text>
+</svg>`;
+  res.status(200).setHeader("Content-Type", "image/svg+xml; charset=utf-8").setHeader("Cache-Control", "public, max-age=300, s-maxage=600").send(svg);
+}
+
+// server/aboutDeveloperPage.ts
+function escapeHtml2(value) {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function absoluteUrl2(req, path) {
+  const host = req.get("x-forwarded-host") || req.get("host") || "nextlecture.vercel.app";
+  const proto = (req.get("x-forwarded-proto") || "https").split(",")[0].trim();
+  return `${proto}://${host}${path}`;
+}
+var PAGE_TITLE = "Lovepreet Singh (LSGZ) \u2013 Creator & Developer of NextLecture";
+var PAGE_DESCRIPTION = "Meet Lovepreet Singh (LSGZ), independent student developer at GNDEC and the original creator and maintainer of NextLecture \u2014 a platform that simplifies timetables and campus academic tools for GNDEC students.";
+async function handleAboutDeveloperPage(req, res) {
+  const pageUrl = absoluteUrl2(req, "/about-developer");
+  const imageUrl = absoluteUrl2(req, "/og-preview.png");
+  const siteUrl = absoluteUrl2(req, "/");
+  const host = req.get("x-forwarded-host") || req.get("host") || "nextlecture.vercel.app";
+  const proto = (req.get("x-forwarded-proto") || "https").split(",")[0].trim();
+  const indexResponse = await fetch(`${proto}://${host}/index.html`);
+  if (!indexResponse.ok) {
+    throw new Error(`Could not load SPA shell (${indexResponse.status})`);
+  }
+  let html = await indexResponse.text();
+  const title = escapeHtml2(PAGE_TITLE);
+  const description = escapeHtml2(PAGE_DESCRIPTION);
+  const safePageUrl = escapeHtml2(pageUrl);
+  const safeImageUrl = escapeHtml2(imageUrl);
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebPage",
+        "@id": `${pageUrl}#webpage`,
+        url: pageUrl,
+        name: PAGE_TITLE,
+        description: PAGE_DESCRIPTION,
+        isPartOf: {
+          "@type": "WebSite",
+          "@id": `${siteUrl}#website`,
+          name: "NextLecture",
+          url: siteUrl
+        },
+        about: { "@id": `${pageUrl}#person` },
+        mainEntity: { "@id": `${pageUrl}#person` },
+        inLanguage: "en"
+      },
+      {
+        "@type": "Person",
+        "@id": `${pageUrl}#person`,
+        name: "Lovepreet Singh",
+        alternateName: "LSGZ",
+        url: "https://lsgz.vercel.app",
+        jobTitle: "Independent Student Developer",
+        affiliation: {
+          "@type": "CollegeOrUniversity",
+          name: "Guru Nanak Dev Engineering College (GNDEC)",
+          address: {
+            "@type": "PostalAddress",
+            addressLocality: "Ludhiana",
+            addressRegion: "Punjab",
+            addressCountry: "IN"
+          }
+        },
+        sameAs: [
+          "https://github.com/lsgzt",
+          "https://www.linkedin.com/in/lovepreet-singh-3b358287/",
+          "https://t.me/lsgzt",
+          "https://lsgz.vercel.app"
+        ],
+        knowsAbout: ["NextLecture", "web development", "GNDEC timetables"]
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": `${siteUrl}#software`,
+        name: "NextLecture",
+        url: "https://nextlecture.vercel.app",
+        applicationCategory: "EducationApplication",
+        operatingSystem: "Web",
+        description: "NextLecture helps GNDEC students access timetables, vacant rooms, campus notices, holidays, and related academic tools in one place.",
+        author: { "@id": `${pageUrl}#person` },
+        creator: { "@id": `${pageUrl}#person` },
+        publisher: { "@id": `${pageUrl}#person` }
+      }
+    ]
+  };
+  const metaBlock = `
+    <title>${title}</title>
+    <meta name="description" content="${description}" />
+    <link rel="canonical" href="${safePageUrl}" />
+    <meta property="og:site_name" content="NextLecture" />
+    <meta property="og:type" content="profile" />
+    <meta property="og:url" content="${safePageUrl}" />
+    <meta property="og:title" content="${title}" />
+    <meta property="og:description" content="${description}" />
+    <meta property="og:image" content="${safeImageUrl}" />
+    <meta property="og:image:secure_url" content="${safeImageUrl}" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1500" />
+    <meta property="og:image:height" content="844" />
+    <meta property="og:image:alt" content="${title}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${title}" />
+    <meta name="twitter:description" content="${description}" />
+    <meta name="twitter:image" content="${safeImageUrl}" />
+    <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
+  `;
+  html = html.replace(/<title>[^<]*<\/title>/i, "").replace(/<meta\s+name="description"[^>]*>/gi, "").replace(/<link\s+rel="canonical"[^>]*>/gi, "").replace(/<meta\s+property="og:[^"]+"[^>]*>/gi, "").replace(/<meta\s+name="twitter:[^"]+"[^>]*>/gi, "");
+  if (/<head[^>]*>/i.test(html)) {
+    html = html.replace(/<head[^>]*>/i, (match) => `${match}
+${metaBlock}`);
+  } else {
+    html = metaBlock + html;
+  }
+  res.status(200).setHeader("Content-Type", "text/html; charset=utf-8").setHeader("Cache-Control", "public, max-age=300, s-maxage=3600").send(html);
+}
+
+// server/privacyPolicyPage.ts
+function escapeHtml3(value) {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function absoluteUrl3(req, path) {
+  const host = req.get("x-forwarded-host") || req.get("host") || "nextlecture.vercel.app";
+  const proto = (req.get("x-forwarded-proto") || "https").split(",")[0].trim();
+  return `${proto}://${host}${path}`;
+}
+var PAGE_TITLE2 = "Privacy Policy \u2014 NextLecture";
+var PAGE_DESCRIPTION2 = "Privacy Policy for the NextLecture website, Progressive Web App, and Android application used by GNDEC students.";
+async function handlePrivacyPolicyPage(req, res) {
+  const pageUrl = absoluteUrl3(req, "/privacy");
+  const imageUrl = absoluteUrl3(req, "/og-preview.png");
+  const siteUrl = absoluteUrl3(req, "/");
+  const host = req.get("x-forwarded-host") || req.get("host") || "nextlecture.vercel.app";
+  const proto = (req.get("x-forwarded-proto") || "https").split(",")[0].trim();
+  const indexResponse = await fetch(`${proto}://${host}/index.html`);
+  if (!indexResponse.ok) {
+    throw new Error(`Could not load SPA shell (${indexResponse.status})`);
+  }
+  let html = await indexResponse.text();
+  const title = escapeHtml3(PAGE_TITLE2);
+  const description = escapeHtml3(PAGE_DESCRIPTION2);
+  const safePageUrl = escapeHtml3(pageUrl);
+  const safeImageUrl = escapeHtml3(imageUrl);
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "@id": `${pageUrl}#webpage`,
+    url: pageUrl,
+    name: PAGE_TITLE2,
+    description: PAGE_DESCRIPTION2,
+    isPartOf: {
+      "@type": "WebSite",
+      "@id": `${siteUrl}#website`,
+      name: "NextLecture",
+      url: siteUrl
+    },
+    inLanguage: "en"
+  };
+  const metaBlock = `
+    <title>${title}</title>
+    <meta name="description" content="${description}" />
+    <link rel="canonical" href="${safePageUrl}" />
+    <meta property="og:site_name" content="NextLecture" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="${safePageUrl}" />
+    <meta property="og:title" content="${title}" />
+    <meta property="og:description" content="${description}" />
+    <meta property="og:image" content="${safeImageUrl}" />
+    <meta property="og:image:secure_url" content="${safeImageUrl}" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1500" />
+    <meta property="og:image:height" content="844" />
+    <meta property="og:image:alt" content="${title}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${title}" />
+    <meta name="twitter:description" content="${description}" />
+    <meta name="twitter:image" content="${safeImageUrl}" />
+    <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
+  `;
+  html = html.replace(/<title>[^<]*<\/title>/i, "").replace(/<meta\s+name="description"[^>]*>/gi, "").replace(/<link\s+rel="canonical"[^>]*>/gi, "").replace(/<meta\s+property="og:[^"]+"[^>]*>/gi, "").replace(/<meta\s+name="twitter:[^"]+"[^>]*>/gi, "");
+  if (/<head[^>]*>/i.test(html)) {
+    html = html.replace(/<head[^>]*>/i, (match) => `${match}
+${metaBlock}`);
+  } else {
+    html = metaBlock + html;
+  }
+  res.status(200).setHeader("Content-Type", "text/html; charset=utf-8").setHeader("Cache-Control", "public, max-age=300, s-maxage=3600").send(html);
+}
+
+// server/termsPage.ts
+function escapeHtml4(value) {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function absoluteUrl4(req, path) {
+  const host = req.get("x-forwarded-host") || req.get("host") || "nextlecture.vercel.app";
+  const proto = (req.get("x-forwarded-proto") || "https").split(",")[0].trim();
+  return `${proto}://${host}${path}`;
+}
+var PAGE_TITLE3 = "Terms & Conditions \u2014 NextLecture";
+var PAGE_DESCRIPTION3 = "Terms & Conditions for the NextLecture website, Progressive Web App, and Android application used by GNDEC students.";
+async function handleTermsPage(req, res) {
+  const pageUrl = absoluteUrl4(req, "/terms");
+  const imageUrl = absoluteUrl4(req, "/og-preview.png");
+  const siteUrl = absoluteUrl4(req, "/");
+  const host = req.get("x-forwarded-host") || req.get("host") || "nextlecture.vercel.app";
+  const proto = (req.get("x-forwarded-proto") || "https").split(",")[0].trim();
+  const indexResponse = await fetch(`${proto}://${host}/index.html`);
+  if (!indexResponse.ok) {
+    throw new Error(`Could not load SPA shell (${indexResponse.status})`);
+  }
+  let html = await indexResponse.text();
+  const title = escapeHtml4(PAGE_TITLE3);
+  const description = escapeHtml4(PAGE_DESCRIPTION3);
+  const safePageUrl = escapeHtml4(pageUrl);
+  const safeImageUrl = escapeHtml4(imageUrl);
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "@id": `${pageUrl}#webpage`,
+    url: pageUrl,
+    name: PAGE_TITLE3,
+    description: PAGE_DESCRIPTION3,
+    isPartOf: {
+      "@type": "WebSite",
+      "@id": `${siteUrl}#website`,
+      name: "NextLecture",
+      url: siteUrl
+    },
+    inLanguage: "en"
+  };
+  const metaBlock = `
+    <title>${title}</title>
+    <meta name="description" content="${description}" />
+    <link rel="canonical" href="${safePageUrl}" />
+    <meta property="og:site_name" content="NextLecture" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="${safePageUrl}" />
+    <meta property="og:title" content="${title}" />
+    <meta property="og:description" content="${description}" />
+    <meta property="og:image" content="${safeImageUrl}" />
+    <meta property="og:image:secure_url" content="${safeImageUrl}" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1500" />
+    <meta property="og:image:height" content="844" />
+    <meta property="og:image:alt" content="${title}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${title}" />
+    <meta name="twitter:description" content="${description}" />
+    <meta name="twitter:image" content="${safeImageUrl}" />
+    <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
+  `;
+  html = html.replace(/<title>[^<]*<\/title>/i, "").replace(/<meta\s+name="description"[^>]*>/gi, "").replace(/<link\s+rel="canonical"[^>]*>/gi, "").replace(/<meta\s+property="og:[^"]+"[^>]*>/gi, "").replace(/<meta\s+name="twitter:[^"]+"[^>]*>/gi, "");
+  if (/<head[^>]*>/i.test(html)) {
+    html = html.replace(/<head[^>]*>/i, (match) => `${match}
+${metaBlock}`);
+  } else {
+    html = metaBlock + html;
+  }
+  res.status(200).setHeader("Content-Type", "text/html; charset=utf-8").setHeader("Cache-Control", "public, max-age=300, s-maxage=3600").send(html);
+}
+
+// server/homePage.ts
+function escapeHtml5(value) {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function absoluteUrl5(req, path) {
+  const host = req.get("x-forwarded-host") || req.get("host") || "localhost";
+  const proto = (req.get("x-forwarded-proto") || (process.env.NODE_ENV === "production" ? "https" : "http")).split(",")[0].trim();
+  return `${proto}://${host}${path}`;
+}
+async function handleHomepagePage(req, res) {
+  const indexUrl = absoluteUrl5(req, "/index.html");
+  const siteUrl = absoluteUrl5(req, "/");
+  const imageUrl = absoluteUrl5(req, "/og-preview.png");
+  const indexResponse = await fetch(indexUrl);
+  if (!indexResponse.ok) {
+    throw new Error(`Could not load SPA shell (${indexResponse.status})`);
+  }
+  let html = await indexResponse.text();
+  const safeSiteUrl = escapeHtml5(siteUrl);
+  const safeImageUrl = escapeHtml5(imageUrl);
+  const metaBlock = `
+    <link rel="canonical" href="${safeSiteUrl}" />
+    <meta property="og:url" content="${safeSiteUrl}" />
+    <meta property="og:image" content="${safeImageUrl}" />
+    <meta property="og:image:secure_url" content="${safeImageUrl}" />
+    <meta name="twitter:image" content="${safeImageUrl}" />
+  `;
+  html = html.replace(/<link\s+rel="canonical"[^>]*>/gi, "").replace(/<meta\s+property="og:url"[^>]*>/gi, "").replace(/<meta\s+property="og:image(?::secure_url)?"[^>]*>/gi, "").replace(/<meta\s+name="twitter:image"[^>]*>/gi, "");
+  html = html.replace(/<head[^>]*>/i, (match) => `${match}
+${metaBlock}`);
+  res.status(200).setHeader("Content-Type", "text/html; charset=utf-8").setHeader("Cache-Control", "public, max-age=300, s-maxage=300").setHeader("Vary", "Host").send(html);
+}
+
 // server/app.ts
 function createApp() {
   const app2 = express();
@@ -3324,7 +4061,7 @@ function createApp() {
         });
         return;
       }
-      const admin = createClient2(supabaseUrl, serviceKey, {
+      const admin = createClient3(supabaseUrl, serviceKey, {
         auth: { autoRefreshToken: false, persistSession: false }
       });
       const [students, teachers] = await Promise.all([
@@ -3402,6 +4139,69 @@ function createApp() {
     } catch (error) {
       console.error("[LMS directory] lookup failed:", error instanceof Error ? error.message : error);
       res.status(502).json({ message: "The official section list is unavailable right now." });
+    }
+  });
+  app2.post("/api/faculty/sync", async (req, res) => {
+    const expected = process.env.FACULTY_SYNC_SECRET;
+    const supplied = req.header("x-faculty-sync-secret") || req.header("authorization")?.replace(/^Bearer\s+/i, "") || "";
+    if (!expected || supplied !== expected) {
+      res.status(401).json({ message: "Unauthorized. Configure and supply FACULTY_SYNC_SECRET to run the faculty sync." });
+      return;
+    }
+    try {
+      const report = await runFacultyAttendanceSync();
+      res.status(report.status === "failed" ? 500 : 200).json(report);
+    } catch (error) {
+      console.error("[Faculty sync] failed:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: error instanceof Error ? error.message : "The faculty sync failed." });
+    }
+  });
+  app2.get(["/mark-attendance", "/mark-attendance/:sessionId"], async (req, res, next) => {
+    try {
+      await handleMarkAttendancePage(req, res);
+    } catch (error) {
+      console.error("[Mark attendance] page shell failed:", error instanceof Error ? error.message : error);
+      next();
+    }
+  });
+  app2.get("/about-developer", async (req, res, next) => {
+    try {
+      await handleAboutDeveloperPage(req, res);
+    } catch (error) {
+      console.error("[About developer] page shell failed:", error instanceof Error ? error.message : error);
+      next();
+    }
+  });
+  app2.get("/privacy", async (req, res, next) => {
+    try {
+      await handlePrivacyPolicyPage(req, res);
+    } catch (error) {
+      console.error("[Privacy policy] page shell failed:", error instanceof Error ? error.message : error);
+      next();
+    }
+  });
+  app2.get("/terms", async (req, res, next) => {
+    try {
+      await handleTermsPage(req, res);
+    } catch (error) {
+      console.error("[Terms] page shell failed:", error instanceof Error ? error.message : error);
+      next();
+    }
+  });
+  app2.get("/api/og/mark-attendance.png", (req, res) => {
+    try {
+      handleMarkAttendanceOgImage(req, res);
+    } catch (error) {
+      console.error("[Mark attendance OG] image failed:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Could not render OG image" });
+    }
+  });
+  app2.get("/", async (req, res, next) => {
+    try {
+      await handleHomepagePage(req, res);
+    } catch (error) {
+      console.error("[Homepage] page shell failed:", error instanceof Error ? error.message : error);
+      next();
     }
   });
   app2.use(

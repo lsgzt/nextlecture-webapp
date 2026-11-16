@@ -16,6 +16,7 @@ import { handleMarkAttendanceOgImage, handleMarkAttendancePage } from "./markAtt
 import { handleAboutDeveloperPage } from "./aboutDeveloperPage";
 import { handlePrivacyPolicyPage } from "./privacyPolicyPage";
 import { handleTermsPage } from "./termsPage";
+import { handleHomepagePage } from "./homePage";
 
 /**
  * Creates the shared HTTP application for local hosting and serverless adapters.
@@ -333,6 +334,15 @@ export function createApp() {
     } catch (error) {
       console.error("[Mark attendance OG] image failed:", error instanceof Error ? error.message : error);
       res.status(500).json({ message: "Could not render OG image" });
+    }
+  });
+
+  app.get("/", async (req, res, next) => {
+    try {
+      await handleHomepagePage(req, res);
+    } catch (error) {
+      console.error("[Homepage] page shell failed:", error instanceof Error ? error.message : error);
+      next();
     }
   });
 
