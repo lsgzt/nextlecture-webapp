@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://nextlecture.vercel.app/sitemap.xml
+Sitemap: https://nextlecture-webapp.vercel.app/sitemap.xml
