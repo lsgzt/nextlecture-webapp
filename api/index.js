@@ -4196,7 +4196,7 @@ function createApp() {
       res.status(500).json({ message: "Could not render OG image" });
     }
   });
-  app2.get("/", async (req, res, next) => {
+  app2.get(["/", "/api"], async (req, res, next) => {
     try {
       await handleHomepagePage(req, res);
     } catch (error) {

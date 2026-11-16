@@ -337,7 +337,7 @@ export function createApp() {
     }
   });
 
-  app.get("/", async (req, res, next) => {
+  app.get(["/", "/api"], async (req, res, next) => {
     try {
       await handleHomepagePage(req, res);
     } catch (error) {
