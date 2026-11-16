@@ -14,30 +14,14 @@
       "schedule": "0 6 * * *"
     }
   ],
-  "rewrites": [
-    {
-      "source": "/",
-      "destination": "/api"
-    },
-    {
-      "source": "/api/(.*)",
-      "destination": "/api"
-    },
-    {
-      "source": "/mark-attendance",
-      "destination": "/api"
-    },
-    {
-      "source": "/mark-attendance/(.*)",
-      "destination": "/api"
-    },
-    {
-      "source": "/about-developer",
-      "destination": "/api"
-    },
-    {
-      "source": "/((?!api$|api/).*)",
-      "destination": "/index.html"
-    }
+  "routes": [
+    { "src": "^/$", "dest": "/api" },
+    { "src": "^/api(?:/(.*))?$", "dest": "/api" },
+    { "src": "^/mark-attendance(?:/(.*))?$", "dest": "/api" },
+    { "src": "^/about-developer$", "dest": "/api" },
+    { "src": "^/privacy$", "dest": "/api" },
+    { "src": "^/terms$", "dest": "/api" },
+    { "handle": "filesystem" },
+    { "src": "^/(.*)$", "dest": "/index.html" }
   ]
 }
