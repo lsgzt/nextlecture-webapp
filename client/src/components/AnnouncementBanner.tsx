@@ -12,11 +12,12 @@ import {
 import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ANNOUNCEMENTS_SOURCE_URL,
-  normalizeAnnouncements,
+  listMatchingAnnouncements,
   resolveAnnouncementStyle,
   type Announcement,
   type AnnouncementStyle,
 } from "@shared/announcements";
+import { isExamModeOn } from "@shared/exams";
 import { readStoredStudentProfile } from "@/lib/student-profile-storage";
 
 const DISMISSED_KEY = "nextlecture:dismissed-announcements";
@@ -166,7 +167,14 @@ const STYLE_THEMES: Record<AnnouncementStyle, StyleTheme> = {
   },
 };
 
-export function AnnouncementBanner({ className = "" }: { className?: string }) {
+export function AnnouncementBanner({
+  className = "",
+  /** When set, skip this announcement id (used so a readable exam date sheet is not shown twice). */
+  hideAnnouncementId,
+}: {
+  className?: string;
+  hideAnnouncementId?: string | null;
+}) {
   const [items, setItems] = useState<Announcement[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(() =>
     typeof window === "undefined" ? new Set() : readDismissedIds(),
@@ -197,7 +205,14 @@ export function AnnouncementBanner({ className = "" }: { className?: string }) {
             }
           : null;
 
-        setItems(normalizeAnnouncements(payload, audience));
+        // Prefer a non-exam notice when exam mode owns the schedule UI.
+        const matching = listMatchingAnnouncements(payload, audience).filter(item => {
+          if (hideAnnouncementId && item.id === hideAnnouncementId) return false;
+          // Hide pure exam-mode sheets from the notice card when they are readable elsewhere.
+          if (hideAnnouncementId && isExamModeOn(item.examMode)) return false;
+          return true;
+        });
+        setItems(matching.slice(0, 1));
       } catch {
         // Silent: announcements are optional and must not break the app.
       }
@@ -207,7 +222,7 @@ export function AnnouncementBanner({ className = "" }: { className?: string }) {
       cancelled = true;
       controller.abort();
     };
-  }, []);
+  }, [hideAnnouncementId]);
 
   const dismiss = useCallback((id: string) => {
     setDismissed(current => {

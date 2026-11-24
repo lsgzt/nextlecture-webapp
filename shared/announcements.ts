@@ -31,6 +31,11 @@ export type Announcement = {
   section?: string;
   subsection?: string;
   active?: boolean;
+  /**
+   * When "on" (or true/1/yes/enabled/active), the app enters exam mode and
+   * reads `message` as the date sheet. See shared/exams.ts and Android README.
+   */
+  examMode?: string;
 };
 
 export type AnnouncementsPayload = {
@@ -137,6 +142,13 @@ function coerceAnnouncement(item: unknown): Announcement | null {
     platformRaw === "android-app" || platformRaw === "web-app" || platformRaw === "both"
       ? platformRaw
       : "";
+  const examModeRaw =
+    typeof row.exam_mode === "string"
+      ? row.exam_mode
+      : typeof row.examMode === "string"
+        ? row.examMode
+        : undefined;
+
   return {
     id: row.id.trim(),
     title: row.title.trim(),
@@ -149,7 +161,32 @@ function coerceAnnouncement(item: unknown): Announcement | null {
     section: typeof row.section === "string" ? row.section : undefined,
     subsection: typeof row.subsection === "string" ? row.subsection : undefined,
     active: true,
+    examMode: examModeRaw?.trim() || undefined,
   };
+}
+
+/**
+ * Filter active announcements that match the audience, sort newest-first.
+ * Does not limit to one card — callers that only show one notice should slice.
+ */
+export function listMatchingAnnouncements(
+  payload: unknown,
+  audience?: AnnouncementAudience | null,
+): Announcement[] {
+  if (!payload || typeof payload !== "object") return [];
+  const list = (payload as AnnouncementsPayload).announcements;
+  if (!Array.isArray(list) || list.length === 0) return [];
+
+  return list
+    .map(coerceAnnouncement)
+    .filter((item): item is Announcement => item !== null)
+    .filter(item => item.for !== "android-app")
+    .filter(item => matchesAudience(item, audience))
+    .sort((a, b) => {
+      const left = Date.parse(a.publishedAt) || 0;
+      const right = Date.parse(b.publishedAt) || 0;
+      return right - left;
+    });
 }
 
 /**
@@ -160,20 +197,5 @@ export function normalizeAnnouncements(
   payload: unknown,
   audience?: AnnouncementAudience | null,
 ): Announcement[] {
-  if (!payload || typeof payload !== "object") return [];
-  const list = (payload as AnnouncementsPayload).announcements;
-  if (!Array.isArray(list) || list.length === 0) return [];
-
-  const active = list
-    .map(coerceAnnouncement)
-    .filter((item): item is Announcement => item !== null)
-    .filter(item => item.for !== "android-app")
-    .filter(item => matchesAudience(item, audience))
-    .sort((a, b) => {
-      const left = Date.parse(a.publishedAt) || 0;
-      const right = Date.parse(b.publishedAt) || 0;
-      return right - left;
-    });
-
-  return active.slice(0, 1);
+  return listMatchingAnnouncements(payload, audience).slice(0, 1);
 }

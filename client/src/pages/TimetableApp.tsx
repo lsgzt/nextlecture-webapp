@@ -20,6 +20,19 @@ import { getLectureTypeStyle } from "@/lib/lecture-type-style";
 import { BRAND_LOGO_URL } from "@shared/config";
 import type { CampusHoliday } from "@shared/campus";
 import type { StudentProfile } from "@shared/student-profile";
+import { ANNOUNCEMENTS_SOURCE_URL, listMatchingAnnouncements } from "@shared/announcements";
+import {
+  activeExamAnnouncement,
+  computeExamTimeline,
+  formatExamDate,
+  formatExamTimeRange,
+  localIsoDate,
+  readExamGroupChoice,
+  resolveExamState,
+  writeExamGroupChoice,
+  type Exam,
+  type ExamState,
+} from "@shared/exams";
 
 const SELECTED_GROUP_KEY = "nextlecture:selected-group";
 const LOCAL_TIMETABLE_KEY = "nextlecture:last-timetable";
@@ -281,6 +294,8 @@ export default function TimetableApp() {
   const [now, setNow] = useState(() => new Date());
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const [showPicker, setShowPicker] = useState(() => !getInitialSelectedGroup());
+  const [examState, setExamState] = useState<ExamState | null>(null);
+  const [examGroupTick, setExamGroupTick] = useState(0);
   const groupsQuery = trpc.timetable.groups.useQuery(undefined, { staleTime: 60 * 1000, refetchOnMount: "always", retry: 1 });
   const dashboardQuery = trpc.timetable.dashboard.useQuery({ group: selectedGroup ?? "ITB2" }, { enabled: Boolean(selectedGroup), staleTime: 60 * 1000, refetchOnMount: "always", retry: 1 });
   const noticesQuery = trpc.campus.notices.useQuery({ forceRefresh: true }, { staleTime: 0, refetchOnMount: "always", retry: 1 });
@@ -292,6 +307,56 @@ export default function TimetableApp() {
     const tick = window.setInterval(() => setNow(new Date()), 30_000);
     return () => window.clearInterval(tick);
   }, []);
+
+  // Exam mode: fetch announcements and resolve the active date sheet for this student.
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const response = await fetch(ANNOUNCEMENTS_SOURCE_URL, {
+          signal: controller.signal,
+          headers: { Accept: "application/json" },
+          cache: "no-cache",
+        });
+        if (!response.ok) return;
+        const payload = await response.json();
+        if (cancelled) return;
+        const profile = studentProfile;
+        const audience = profile
+          ? { branch: profile.branch, section: profile.section, subsection: profile.subsection }
+          : null;
+        const matching = listMatchingAnnouncements(payload, audience);
+        const active = activeExamAnnouncement(matching);
+        if (!active) {
+          setExamState(null);
+          return;
+        }
+        const todayIso = localIsoDate(new Date());
+        const choice = readExamGroupChoice();
+        const resolved = resolveExamState(
+          active,
+          profile
+            ? {
+                branch: profile.branch,
+                section: profile.section,
+                subsection: profile.subsection,
+                group: selectedGroup,
+              }
+            : null,
+          todayIso,
+          choice,
+        );
+        if (!cancelled) setExamState(resolved);
+      } catch {
+        if (!cancelled) setExamState(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [studentProfile, selectedGroup, examGroupTick]);
 
   useEffect(() => {
     const online = () => setIsOnline(true);
@@ -354,6 +419,35 @@ export default function TimetableApp() {
     return coveredByLongLecture ? [] : [{ kind: "free" as const, startTime: slot }];
   }), [data?.timetable.timeSlots, tomorrowLectures]);
   const next = useMemo(() => getNextLecture(displayTimetable, now), [displayTimetable, now]);
+  const examTimeline = useMemo(
+    () => (examState && !examState.needsGroupPick ? computeExamTimeline(examState.exams, now) : null),
+    [examState, now],
+  );
+  const examModeActive = Boolean(examState);
+  // When schedule is fully readable, hide the exam announcement card; keep it if partial/empty.
+  const announcementHideId =
+    examState && examState.schedule.exams.length > 0 && examState.schedule.unreadable === 0
+      ? examState.announcement.id
+      : null;
+
+  const pickExamGroup = (groupName: string) => {
+    if (!examState) return;
+    writeExamGroupChoice(examState.announcement.id, groupName);
+    setExamGroupTick(t => t + 1);
+  };
+
+  const examsForView = useMemo(() => {
+    if (!examState || examState.needsGroupPick) return [] as Exam[];
+    const todayIso = localIsoDate(now);
+    const tomorrowIso = localIsoDate(tomorrow);
+    if (scheduleView === "today") return examState.exams.filter(e => e.date === todayIso);
+    if (scheduleView === "tomorrow") return examState.exams.filter(e => e.date === tomorrowIso);
+    // week: next 7 days including today
+    const end = new Date(now);
+    end.setDate(end.getDate() + 6);
+    const endIso = localIsoDate(end);
+    return examState.exams.filter(e => e.date >= todayIso && e.date <= endIso);
+  }, [examState, scheduleView, now, tomorrow]);
   const temporarySectionBranch = useMemo(() => getTemporarySectionBranch(selectedGroup), [selectedGroup]);
   const profileMatchesSelectedBranch = studentProfile?.branch === temporarySectionBranch;
   const firstName = studentProfile && profileMatchesSelectedBranch ? studentProfile.studentName.trim().split(/\s+/)[0] ?? "" : "";
@@ -432,7 +526,7 @@ export default function TimetableApp() {
         )}
 
         <NoticeBanner notices={noticesQuery.data?.notices ?? []} className="mb-4" />
-        <AnnouncementBanner className="mb-4" />
+        <AnnouncementBanner className="mb-4" hideAnnouncementId={announcementHideId} />
 
         {data?.updateError && (
           <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/25 dark:text-amber-100">
@@ -493,8 +587,76 @@ export default function TimetableApp() {
               </div>
             </section>
 
-            {/* Hero: next lecture, happening now, or a clear day. */}
-            {next ? (
+            {/* Hero: exam mode takes priority; otherwise next lecture / clear day. */}
+            {examModeActive && examState?.needsGroupPick ? (
+              <section className="nl-enter mb-4 rounded-[1.5rem] border border-violet-300/70 bg-violet-50/50 p-4 dark:border-violet-900 dark:bg-violet-950/25 sm:rounded-[1.75rem] sm:p-6">
+                <p className="text-[0.68rem] font-bold tracking-[0.15em] text-violet-700 dark:text-violet-300">EXAM MODE</p>
+                <h2 className="mt-2 font-display text-xl font-semibold tracking-[-0.04em] sm:text-2xl">{examState.announcement.title}</h2>
+                <p className="mt-2 text-sm text-muted-foreground">Which group do you sit with? Pick once for this date sheet.</p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {examState.schedule.groups.map(g => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => pickExamGroup(g)}
+                      className="rounded-full bg-violet-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-800"
+                    >
+                      {g}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : examModeActive && examTimeline?.featured ? (
+              <section className="nl-enter mb-4 rounded-[1.5rem] bg-violet-700 p-4 text-white shadow-xl shadow-violet-950/15 sm:rounded-[1.75rem] sm:p-6">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-[0.68rem] font-bold tracking-[0.15em] text-violet-100">
+                    {examTimeline.featured.phase === "ongoing" ? "EXAM ONGOING" : examTimeline.featured.phase === "today" ? "NEXT EXAM TODAY" : "UPCOMING EXAM"}
+                  </p>
+                  <span className="rounded-full bg-white/13 px-2.5 py-1 text-xs font-semibold text-violet-50">
+                    {examTimeline.featured.phase === "ongoing"
+                      ? `Ends in ${humanizeDuration(Math.max(0, examTimeline.featured.minutes))}`
+                      : examTimeline.featured.daysAhead === 0
+                        ? `Starts in ${humanizeDuration(Math.max(0, examTimeline.featured.minutes))}`
+                        : formatExamDate(examTimeline.featured.exam.date, now)}
+                  </span>
+                </div>
+                <h2 className="mt-3.5 font-display text-[1.65rem] font-semibold leading-none tracking-[-0.055em] sm:text-3xl">{examTimeline.featured.exam.subject}</h2>
+                <p className="mt-2.5 text-sm font-semibold text-violet-100/90">
+                  {formatExamDate(examTimeline.featured.exam.date, now)} · {formatExamTimeRange(examTimeline.featured.exam.startMinutes, examTimeline.featured.exam.endMinutes)}
+                </p>
+                {examState?.group && (
+                  <p className="mt-2 text-xs text-violet-200">
+                    {examState.group}
+                    <button type="button" className="ml-2 underline underline-offset-2" onClick={() => { writeExamGroupChoice("", ""); setExamGroupTick(t => t + 1); }}>
+                      Change group
+                    </button>
+                  </p>
+                )}
+                {examTimeline.upcoming.length > 0 && (
+                  <ul className="mt-3.5 space-y-1.5 border-t border-white/15 pt-3.5">
+                    {examTimeline.upcoming.slice(0, 4).map((e, i) => (
+                      <li key={`${e.date}-${e.subject}-${i}`} className="flex justify-between gap-2 text-sm text-violet-100">
+                        <span className="truncate font-medium">{e.subject}</span>
+                        <span className="shrink-0 text-violet-200">{formatExamDate(e.date, now)} · {formatExamTimeRange(e.startMinutes, e.endMinutes)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {examState && examState.schedule.unreadable > 0 && (
+                  <p className="mt-3 text-xs text-amber-200">{examState.schedule.unreadable} line{examState.schedule.unreadable === 1 ? "" : "s"} on the sheet could not be read.</p>
+                )}
+              </section>
+            ) : examModeActive && examTimeline?.allOver ? (
+              <section className="nl-enter mb-4 rounded-[1.5rem] border border-violet-300/70 bg-violet-50/40 px-6 py-10 text-center dark:border-violet-900 dark:bg-violet-950/20 sm:rounded-[1.75rem]">
+                <h2 className="font-display text-2xl font-semibold tracking-[-0.04em]">Exams are over</h2>
+                <p className="mx-auto mt-1.5 max-w-sm text-sm leading-6 text-muted-foreground">All listed exams have finished. The timetable stays paused until exam mode is turned off on the date sheet.</p>
+              </section>
+            ) : examModeActive && examState && examState.schedule.exams.length === 0 ? (
+              <section className="nl-enter mb-4 rounded-[1.5rem] border border-amber-300/70 bg-amber-50/40 px-6 py-8 text-center dark:border-amber-900 dark:bg-amber-950/20 sm:rounded-[1.75rem]">
+                <h2 className="font-display text-xl font-semibold tracking-[-0.04em]">Exam mode is on</h2>
+                <p className="mx-auto mt-1.5 max-w-sm text-sm leading-6 text-muted-foreground">The date sheet could not be read. Check the announcement card below for the published schedule.</p>
+              </section>
+            ) : next ? (
               <section className="nl-enter mb-4 rounded-[1.5rem] bg-teal-700 p-4 text-white shadow-xl shadow-teal-950/15 sm:rounded-[1.75rem] sm:p-6">
                 <div className="flex items-start justify-between gap-3">
                   <p className="text-[0.68rem] font-bold tracking-[0.15em] text-teal-100">{next.phase === "current" ? "HAPPENING NOW" : "NEXT LECTURE"}</p>
@@ -538,7 +700,17 @@ export default function TimetableApp() {
                   </span>
                   <div>
                     <p className="font-display text-lg font-semibold tracking-[-0.035em]">
-                      {scheduleView === "today" ? "Today’s timetable" : scheduleView === "tomorrow" ? "Tomorrow’s timetable" : "This week’s timetable"}
+                      {examModeActive
+                        ? scheduleView === "today"
+                          ? "Today’s exams"
+                          : scheduleView === "tomorrow"
+                            ? "Tomorrow’s exams"
+                            : "This week’s exams"
+                        : scheduleView === "today"
+                          ? "Today’s timetable"
+                          : scheduleView === "tomorrow"
+                            ? "Tomorrow’s timetable"
+                            : "This week’s timetable"}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {scheduleView === "today"
@@ -567,7 +739,46 @@ export default function TimetableApp() {
                 </div>
               )}
 
-              {scheduleView !== "week" ? (
+              {examModeActive && !examState?.needsGroupPick ? (
+                <div className="mt-5 space-y-2.5">
+                  {examModeActive && (
+                    <p className="rounded-xl bg-violet-50 px-3 py-2 text-xs font-medium text-violet-800 dark:bg-violet-950/40 dark:text-violet-200">
+                      Exams are ongoing — the lecture timetable is paused while this date sheet is active.
+                    </p>
+                  )}
+                  {examsForView.length === 0 ? (
+                    <div className="rounded-2xl bg-muted/55 px-5 py-9 text-center">
+                      <Clock3 className="mx-auto h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                      <p className="mt-3 font-semibold">No exams {scheduleView === "today" ? "today" : scheduleView === "tomorrow" ? "tomorrow" : "this week"}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">Check the full sheet on Home or another day tab.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-2.5">
+                      {examsForView.map((exam, i) => (
+                        <article
+                          key={`${exam.date}-${exam.subject}-${exam.startMinutes}-${i}`}
+                          className="rounded-2xl border border-violet-200/80 bg-violet-50/40 px-4 py-3.5 dark:border-violet-900 dark:bg-violet-950/30"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="font-semibold text-foreground">{exam.subject}</p>
+                              <p className="mt-1 text-sm text-muted-foreground">
+                                {formatExamDate(exam.date, now)} · {formatExamTimeRange(exam.startMinutes, exam.endMinutes)}
+                              </p>
+                              {exam.sections.length > 0 && (
+                                <p className="mt-1 text-xs text-muted-foreground">Sections: {exam.sections.join(", ")}</p>
+                              )}
+                            </div>
+                            <span className="shrink-0 rounded-full bg-violet-700/10 px-2.5 py-1 text-[0.66rem] font-bold tracking-wide text-violet-800 dark:text-violet-200">
+                              EXAM
+                            </span>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : scheduleView !== "week" ? (
                 <div className="mt-5 space-y-2.5">
                   {activeTimeline.length === 0 ? (
                     <div className="rounded-2xl bg-muted/55 px-5 py-9 text-center">
